@@ -1,31 +1,68 @@
-# OPC UA PubSub MicroPython (ESP32)
-
-> **Implementação Embarcada da Especificação OPC UA Part 14**
-> **Foco:** Baixo consumo de RAM e Otimização para Microcontroladores (Edge Computing).
-
-Esta biblioteca fornece uma implementação leve e otimizada da especificação **OPC UA Part 14 (PubSub)** escrita em MicroPython. Ela foi desenhada especificamente para rodar em dispositivos com recursos limitados (como ESP32 e RP2040), mantendo a interoperabilidade com sistemas industriais via mensagens JSON sobre MQTT.
-
----
-
-## 📂 Estrutura do Projeto
-
-```text
-micropython_opcua_pubsub/
-├── README.md              # Documentação Principal
+OPC UA PubSub MicroPython (ESP32/RP2040)Implementação Embarcada da Especificação OPC UA Part 14Foco: Baixo consumo de RAM, Edge Computing e Eficiência Energética.Esta biblioteca fornece uma implementação leve ("Zero-Bloat") e otimizada da especificação OPC UA Part 14 (PubSub) escrita especificamente para MicroPython. Diferente das implementações de Desktop, esta biblioteca utiliza técnicas de conservação de memória (__slots__, alocação estática) para viabilizar o protocolo em microcontroladores como ESP32, ESP8266 e Raspberry Pi Pico W.📂 Estrutura do ProjetoPlaintextopcua_pubsub_micropy/
+├── README.md              # Documentação Técnica
 ├── src/
-│   └── opcua_micro.py     # BIBLIOTECA: Core Logic otimizada (__slots__)
+│   └── opcua_micro.py     # CORE: Biblioteca otimizada (~4KB)
 └── examples/
-    ├── boot.py            # EXEMPLO: Gerenciador de conexão WiFi
-    └── main.py            # EXEMPLO: Loop de leitura de sensores e publicação
-📋 Status de Conformidade (Part 14)Esta implementação prioriza a eficiência de memória (RAM) em detrimento de recursos supérfluos da norma.✅ Funcionalidades ImplementadasProfile / FeatureRef. Part 14Detalhes da ImplementaçãoPubSub Base Information Model§6.2Classes otimizadas usando __slots__ para redução drástica de footprint de memória.JSON Encoding§7.2.3Serialização direta de JSON (sem overhead de objetos intermediários).Variant Data Types§6.2.2Suporte nativo para Int32, Float, String e Boolean.MQTT TransportAnexo BTransporte leve utilizando umqtt.simple (Lightweight MQTT).⚠️ Limitações de HardwareData Types: DateTime é simplificado (Unix Epoch ou String ISO básica).Security: Suporte a TLS depende da capacidade do hardware (ESP32-S3 suporta, ESP8266 não recomendado).Buffer: O tamanho das mensagens é limitado pelo buffer de transmissão do socket (tipicamente 1-4KB).🛠️ Instalação e ConfiguraçãoPré-requisitosPlaca ESP32 (S2, S3, C3 ou Clássico).Firmware MicroPython (v1.20+) instalado na placa.IDE: Thonny IDE (recomendado) ou mpremote.Passo 1: Instalar Dependências no ESP32O MicroPython precisa da biblioteca MQTT oficial. Com o ESP32 conectado ao computador e com acesso à internet (via WebREPL ou script de boot), execute no terminal do dispositivo:Pythonimport mip
+    ├── boot.py            # SYSTEM: Inicialização e WiFi
+    └── main.py            # APP: Leitura de sensores e Loop PubSub
+📋 Status de Conformidade (Part 14 - Embedded Profile)Esta implementação segue o conceito de "Nano Profile", priorizando a eficiência em detrimento da cobertura total da norma.Profile / FeatureRef. Part 14StatusDetalhes da OtimizaçãoPubSub Information Model§6.2✅Classes com __slots__ para redução de footprintJSON Encoding§7.2.3✅Serialização ujson direta (Stream-like)DataSetMessage§7.2.4✅Key/Value mapping simplificadoMQTT TransportAnexo B✅Wrapper sobre umqtt.simpleData Types§6.2.2⚠️Suporte a Int, Float, Bool. DateTime simplificado.UADP (Binary)§7.3⏳Planejado (via ustruct)Security§5.3❌Não suportado devido a limitações de CPU🛠️ Instalação e HardwareCompatibilidadeESP32 (S2, S3, C3, Original): Recomendado (Wi-Fi nativo).Raspberry Pi Pico W: Suportado.ESP8266: Funciona, mas requer cuidado extremo com RAM.Pré-requisitosFirmware MicroPython v1.19+ instalado.Biblioteca umqtt.simple (Padrão no MicroPython ou instalável via mip).Instalação (Via MIP ou Manual)Se sua placa tiver acesso à internet:Pythonimport mip
 mip.install("umqtt.simple")
-Alternativa Offline: Copie o arquivo simple.py da biblioteca umqtt manualmente para a pasta /lib/umqtt/ do dispositivo.Passo 2: Copiar a BibliotecaCopie o arquivo src/opcua_micro.py para a raiz (ou para a pasta /lib) do seu dispositivo ESP32.Passo 3: Configurar WiFi e BrokerEdite o arquivo examples/main.py (ou boot.py dependendo da sua preferência) e insira suas credenciais:Python# Configuração de Rede
-SSID = "SEU_WIFI"
-PASSWORD = "SUA_SENHA"
+# Em seguida, copie o arquivo src/opcua_micro.py para a raiz do dispositivo
+🚀 Guia de Uso Rápido1. Código Mínimo (Publisher)Pythonimport time
+from opcua_micro import ESPTransport, NetworkMessage, DataValue
 
-# Configuração do Broker MQTT (IP do seu PC/Gateway)
-BROKER_IP = "192.168.X.X" 
-🚀 Como ExecutarOpção A: Via Thonny IDE (Desenvolvimento)Abra o arquivo examples/main.py no Thonny.Clique no botão Run (F5).Acompanhe o console:PlaintextConectando ao WiFi... OK (192.168.0.105)
-Conectando ao Broker... OK
-[Seq 1] Enviado: 128 bytes
-Opção B: Modo Produção (Boot Automático)Para que o código rode sozinho quando você ligar o ESP32 na tomada:Salve o conteúdo de examples/boot.py como boot.py na raiz do ESP32.Salve o conteúdo de examples/main.py como main.py na raiz do ESP32.Reinicie a placa (Botão EN/RST).
+# Configuração
+transport = ESPTransport("ESP32-Sensor-01", "192.168.1.100")
+transport.connect()
+
+nm = NetworkMessage("ESP32-Sensor-01")
+seq = 0
+
+while True:
+    seq += 1
+    
+    # Payload simples com Timestamp automático
+    dados = {
+        "Temperatura": DataValue(25.4),
+        "Pressao": DataValue(1013.2)
+    }
+    
+    # Cria JSON OPC UA
+    msg = nm.create_json(
+        dataset_writer_id=1, 
+        seq_num=seq, 
+        payload_dict=dados
+    )
+    
+    transport.publish("opcua/json/sensores", msg)
+    time.sleep(1)
+2. Configurando WiFi (boot.py)Recomendamos colocar a conexão WiFi no boot.py para separar a lógica de rede da lógica de aplicação.Python# boot.py
+import network
+import time
+
+ssid = 'SEU_WIFI'
+password = 'SUA_SENHA'
+
+wlan = network.WLAN(network.STA_IF)
+wlan.active(True)
+wlan.connect(ssid, password)
+
+while not wlan.isconnected():
+    time.sleep(1)
+print('WiFi Conectado:', wlan.ifconfig())
+🏗️ Arquitetura e OtimizaçõesA biblioteca foi desenhada para evitar a "fragmentação de memória" (Heap Fragmentation), comum em aplicações JSON no ESP32.Snippet de códigoclassDiagram
+    class DataValue {
+        __slots__ : value, status, ts
+        +to_dict()
+    }
+    class NetworkMessage {
+        +create_json()
+    }
+    class ESPTransport {
+        +connect()
+        +publish()
+    }
+    
+    NetworkMessage ..> DataValue : serializa
+    ESPTransport ..> NetworkMessage : envia
+Diferenças para a Versão Desktop (CPython)Tipagem Dinâmica: Remoção de Type Hints complexos para economizar espaço em disco.Dependências: Remoção do paho-mqtt em favor do umqtt nativo.Gestão de Erros: Simplificada para reiniciar o microcontrolador (Watchdog) em caso de falha crítica de rede, garantindo resiliência em campo.📄 Licença e AutoriaEste projeto faz parte da suíte de ferramentas para IIoT (Industrial IoT) desenvolvida para pesquisa acadêmica.Licença: MITAutor: Fábio (Mestrado UEA)
