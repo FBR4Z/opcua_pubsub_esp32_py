@@ -76,7 +76,7 @@ Tested on ESP32 (240MHz dual-core, MicroPython v1.27.0):
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/opcua_pubsub_esp32.git
+git clone https://github.com/FBR4Z/opcua_pubsub_esp32.git
 cd opcua_pubsub_esp32
 
 # Copy files to ESP32 using Thonny or mpremote
