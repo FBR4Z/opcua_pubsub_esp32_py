@@ -102,7 +102,7 @@ This implementation targets a **functional subset** of IEC 62541-14 suitable for
 
 | Profile | Part 14 Reference | Feasible on ESP32? | What Would Be Needed |
 |---------|-------------------|--------------------|----------------------|
-| **Discovery** | §6.4 | ⚠️ Limited | Part 14 does not define a discovery mechanism for broker-based transports (MQTT). This is a documented gap in the specification itself — unlike Sparkplug B which includes BIRTH/DEATH messages. Would require a custom or community-defined solution |
+| **Discovery** | §6.4 | ⚠️ Limited | |
 | **MetaData Message** | §7.2.4 | ✅ Yes | DataSetMetaData (field names, types, descriptions) as separate NetworkMessage. Adds ~2KB RAM. Planned for future version |
 | **Security Sign** | §5.3.3.4 | ❌ No | Message-level signing (SHA-256 + RSA/ECC) exceeds ESP32 RAM for key storage and crypto operations. Use TLS at transport layer instead |
 | **Security Sign & Encrypt** | §5.3.3.4 | ❌ No | AES-256-GCM + RSA key exchange. Same ESP32 constraints. TLS provides equivalent protection at transport layer |
