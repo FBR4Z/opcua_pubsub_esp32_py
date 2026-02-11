@@ -131,14 +131,6 @@ payload = parse_network_message(mqtt_message)
 # payload = {"LED": {"Value": true, "SourceTimestamp": "..."}}
 ```
 
-## Next Steps
-
-This is the minimal "1-bit" demo. Future iterations will add:
-- BME280 sensor (temperature, pressure, humidity) → Dashboard gauges
-- Potentiometer → Dashboard slider
-- Servo motor control ← Dashboard slider
-- Multiple LEDs ← Dashboard switches
-
 ## Troubleshooting
 
 ### Dashboard shows "Cannot GET /dashboard"
