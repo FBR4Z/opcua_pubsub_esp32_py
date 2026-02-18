@@ -102,7 +102,10 @@ Esta implementação visa um **subconjunto funcional** da IEC 62541-14 adequado 
 
 | Perfil | Referência Part 14 | Viável no ESP32? | O que Seria Necessário |
 |--------|---------------------|------------------|------------------------|
+<<<<<<< HEAD
 | **Discovery** | §6.4 | ⚠️ Limitado | |
+=======
+>>>>>>> b36f89b (feat: add full Node-RED dashboard example + remove discovery from READMEs)
 | **MetaData Message** | §7.2.4 | ✅ Sim | DataSetMetaData (nomes de campos, tipos, descrições) como NetworkMessage separada. Adiciona ~2KB RAM. Planejado para versão futura |
 | **Security Sign** | §5.3.3.4 | ❌ Não | Assinatura em nível de mensagem (SHA-256 + RSA/ECC) excede RAM do ESP32 para armazenamento de chaves e operações criptográficas. Use TLS na camada de transporte |
 | **Security Sign & Encrypt** | §5.3.3.4 | ❌ Não | AES-256-GCM + troca de chaves RSA. Mesmas limitações do ESP32. TLS fornece proteção equivalente na camada de transporte |
@@ -227,6 +230,8 @@ opcua_pubsub_esp32_py/
 
 - **[docs/BENCHMARK_REPORT.md](docs/BENCHMARK_REPORT.md)** — Benchmark completo: tamanho de mensagem, throughput, latência, memória. Inclui prova de validação OpcCmd e instruções de reprodução.
 - **[examples/lcd_display/README.md](examples/lcd_display/README.md)** — Guia de ligação, configuração e uso do exemplo com LCD.
+- **[examples/node-red/README.md](examples/node-red/README.md)** — Exemplo mínimo bidirecional Node-RED (botão + LED).
+- **[examples/nodered-dashboard/README.md](examples/nodered-dashboard/README.md)** — Dashboard Node-RED completo com sensores, gauges, gráficos e controle de atuadores.
 
 ---
 

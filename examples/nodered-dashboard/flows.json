@@ -1,0 +1,433 @@
+[
+    {
+        "id": "opcua_full_flow",
+        "type": "tab",
+        "label": "OPC UA PubSub Dashboard",
+        "disabled": false,
+        "info": "Full bidirectional OPC UA PubSub dashboard.\nSensors: DHT11, Potentiometer, Button → Gauges & Charts\nActuators: LED, Servo ← Switch & Slider\nAll messages use IEC 62541-14 JSON encoding."
+    },
+
+    {
+        "id": "ui_base",
+        "type": "ui-base",
+        "name": "OPC UA Dashboard",
+        "path": "/dashboard",
+        "includeClientData": true,
+        "acceptsClientConfig": ["ui-notification", "ui-control"],
+        "showPathInSidebar": false
+    },
+    {
+        "id": "ui_theme",
+        "type": "ui-theme",
+        "name": "Dark Theme",
+        "colors": {
+            "surface": "#1e1e1e",
+            "primary": "#00b0ff",
+            "bgPage": "#121212",
+            "groupBg": "#1e1e1e",
+            "groupOutline": "#333333"
+        },
+        "sizes": {
+            "pagePadding": "12px",
+            "groupGap": "12px",
+            "groupBorderRadius": "4px",
+            "widgetGap": "12px"
+        }
+    },
+    {
+        "id": "ui_page",
+        "type": "ui-page",
+        "name": "ESP32 OPC UA",
+        "ui": "ui_base",
+        "path": "/esp32",
+        "icon": "mdi-chip",
+        "layout": "grid",
+        "theme": "ui_theme",
+        "order": 1
+    },
+
+    {
+        "id": "grp_sensors",
+        "type": "ui-group",
+        "name": "Sensors (ESP32 → Node-RED)",
+        "page": "ui_page",
+        "width": 6, "height": 1,
+        "order": 1, "showTitle": true, "visible": true, "disabled": false
+    },
+    {
+        "id": "grp_controls",
+        "type": "ui-group",
+        "name": "Actuators (Node-RED → ESP32)",
+        "page": "ui_page",
+        "width": 6, "height": 1,
+        "order": 2, "showTitle": true, "visible": true, "disabled": false
+    },
+    {
+        "id": "grp_charts",
+        "type": "ui-group",
+        "name": "History",
+        "page": "ui_page",
+        "width": 12, "height": 1,
+        "order": 3, "showTitle": true, "visible": true, "disabled": false
+    },
+    {
+        "id": "grp_debug",
+        "type": "ui-group",
+        "name": "OPC UA Messages",
+        "page": "ui_page",
+        "width": 12, "height": 1,
+        "order": 4, "showTitle": true, "visible": true, "disabled": false
+    },
+
+    {
+        "id": "mqtt_broker",
+        "type": "mqtt-broker",
+        "name": "Local Mosquitto",
+        "broker": "localhost",
+        "port": "1883",
+        "clientid": "NodeRED-OPCUA-Full",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true
+    },
+
+    {"id": "c1", "type": "comment", "z": "opcua_full_flow",
+     "name": "═══ BUTTON (ESP32 → Dashboard) ═══", "x": 230, "y": 40, "wires": []},
+
+    {
+        "id": "mqtt_in_button",
+        "type": "mqtt in",
+        "z": "opcua_full_flow",
+        "name": "Button Topic",
+        "topic": "opcua/json/nodered/button",
+        "qos": "0", "datatype": "utf8",
+        "broker": "mqtt_broker",
+        "x": 150, "y": 100,
+        "wires": [["parse_button"]]
+    },
+    {
+        "id": "parse_button",
+        "type": "function",
+        "z": "opcua_full_flow",
+        "name": "Parse Button",
+        "func": "var opcua = JSON.parse(msg.payload);\nif (opcua.MessageType !== 'ua-data') return null;\nvar dsm = opcua.Messages[0];\nvar btn = dsm.Payload.Button || {};\nmsg.payload = btn.Value || false;\nmsg.opcua_seq = dsm.SequenceNumber;\nreturn msg;",
+        "outputs": 1,
+        "x": 350, "y": 100,
+        "wires": [["ui_button_state", "fmt_btn_debug"]]
+    },
+    {
+        "id": "ui_button_state",
+        "type": "ui-text",
+        "z": "opcua_full_flow",
+        "group": "grp_sensors",
+        "name": "Button",
+        "order": 1, "width": "6", "height": "1",
+        "label": "Button:",
+        "format": "{{msg.payload ? '🟢 PRESSED' : '⚫ RELEASED'}}",
+        "layout": "row-spread",
+        "fontSize": 18, "color": "#e0e0e0",
+        "x": 570, "y": 80, "wires": []
+    },
+    {
+        "id": "fmt_btn_debug",
+        "type": "function",
+        "z": "opcua_full_flow",
+        "name": "→ debug",
+        "func": "var s = msg.payload ? 'PRESSED' : 'RELEASED';\nmsg.payload = '[BTN #' + msg.opcua_seq + '] ' + s;\nreturn msg;",
+        "outputs": 1,
+        "x": 570, "y": 120,
+        "wires": [["ui_debug"]]
+    },
+
+    {"id": "c2", "type": "comment", "z": "opcua_full_flow",
+     "name": "═══ SENSORS (ESP32 → Dashboard) ═══", "x": 230, "y": 180, "wires": []},
+
+    {
+        "id": "mqtt_in_sensors",
+        "type": "mqtt in",
+        "z": "opcua_full_flow",
+        "name": "Sensors Topic",
+        "topic": "opcua/json/nodered/sensors",
+        "qos": "0", "datatype": "utf8",
+        "broker": "mqtt_broker",
+        "x": 150, "y": 240,
+        "wires": [["parse_sensors"]]
+    },
+    {
+        "id": "parse_sensors",
+        "type": "function",
+        "z": "opcua_full_flow",
+        "name": "Parse Sensors",
+        "func": "var opcua = JSON.parse(msg.payload);\nif (opcua.MessageType !== 'ua-data') return [null,null,null,null];\n\nvar p = opcua.Messages[0].Payload;\n\nvar temp = {payload: (p.Temperature || {}).Value || 0};\nvar humid = {payload: (p.Humidity || {}).Value || 0};\nvar pot = {payload: (p.Potentiometer || {}).Value || 0};\nvar servo = {payload: (p.ServoPosition || {}).Value || 0};\n\nreturn [temp, humid, pot, servo];",
+        "outputs": 4,
+        "outputLabels": ["Temperature", "Humidity", "Potentiometer", "ServoPos"],
+        "x": 360, "y": 240,
+        "wires": [
+            ["ui_gauge_temp", "ui_chart_temp"],
+            ["ui_gauge_humid", "ui_chart_humid"],
+            ["ui_gauge_pot"],
+            ["ui_servo_pos"]
+        ]
+    },
+    {
+        "id": "ui_gauge_temp",
+        "type": "ui-gauge",
+        "z": "opcua_full_flow",
+        "group": "grp_sensors",
+        "name": "Temperature",
+        "order": 2, "width": "3", "height": "4",
+        "gtype": "gauge-half",
+        "gstyle": "needle",
+        "title": "Temperature",
+        "units": "°C",
+        "icon": "",
+        "prefix": "",
+        "suffix": "",
+        "segments": [
+            {"from": 0, "color": "#2196F3"},
+            {"from": 20, "color": "#4CAF50"},
+            {"from": 30, "color": "#FF9800"},
+            {"from": 40, "color": "#f44336"}
+        ],
+        "min": 0, "max": 50,
+        "x": 590, "y": 200, "wires": []
+    },
+    {
+        "id": "ui_gauge_humid",
+        "type": "ui-gauge",
+        "z": "opcua_full_flow",
+        "group": "grp_sensors",
+        "name": "Humidity",
+        "order": 3, "width": "3", "height": "4",
+        "gtype": "gauge-half",
+        "gstyle": "needle",
+        "title": "Humidity",
+        "units": "%",
+        "icon": "",
+        "prefix": "",
+        "suffix": "",
+        "segments": [
+            {"from": 0, "color": "#FF9800"},
+            {"from": 30, "color": "#4CAF50"},
+            {"from": 60, "color": "#2196F3"},
+            {"from": 80, "color": "#f44336"}
+        ],
+        "min": 0, "max": 100,
+        "x": 590, "y": 240, "wires": []
+    },
+    {
+        "id": "ui_gauge_pot",
+        "type": "ui-gauge",
+        "z": "opcua_full_flow",
+        "group": "grp_sensors",
+        "name": "Potentiometer",
+        "order": 4, "width": "3", "height": "4",
+        "gtype": "gauge-half",
+        "gstyle": "needle",
+        "title": "Potentiometer",
+        "units": "%",
+        "icon": "",
+        "prefix": "",
+        "suffix": "",
+        "segments": [
+            {"from": 0, "color": "#4CAF50"},
+            {"from": 50, "color": "#FF9800"},
+            {"from": 80, "color": "#f44336"}
+        ],
+        "min": 0, "max": 100,
+        "x": 590, "y": 280, "wires": []
+    },
+    {
+        "id": "ui_servo_pos",
+        "type": "ui-text",
+        "z": "opcua_full_flow",
+        "group": "grp_sensors",
+        "name": "Servo Position",
+        "order": 5, "width": "3", "height": "1",
+        "label": "Servo:",
+        "format": "{{msg.payload}}°",
+        "layout": "row-spread",
+        "fontSize": 16, "color": "#e0e0e0",
+        "x": 600, "y": 320, "wires": []
+    },
+
+    {
+        "id": "ui_chart_temp",
+        "type": "ui-chart",
+        "z": "opcua_full_flow",
+        "group": "grp_charts",
+        "name": "Temperature History",
+        "label": "Temperature (°C)",
+        "order": 1, "width": "6", "height": "5",
+        "chartType": "line",
+        "category": "topic",
+        "categoryType": "msg",
+        "xAxisLabel": "",
+        "xAxisProperty": "",
+        "xAxisPropertyType": "msg",
+        "xAxisType": "time",
+        "yAxisLabel": "°C",
+        "ymin": "", "ymax": "",
+        "action": "append",
+        "stackSeries": false,
+        "pointShape": "circle",
+        "pointRadius": 3,
+        "showLegend": false,
+        "removeOlder": "5",
+        "removeOlderUnit": "60",
+        "removeOlderPoints": "",
+        "colors": ["#00b0ff"],
+        "textColor": ["#e0e0e0"],
+        "gridColor": ["#333333"],
+        "x": 610, "y": 360, "wires": [[]]
+    },
+    {
+        "id": "ui_chart_humid",
+        "type": "ui-chart",
+        "z": "opcua_full_flow",
+        "group": "grp_charts",
+        "name": "Humidity History",
+        "label": "Humidity (%)",
+        "order": 2, "width": "6", "height": "5",
+        "chartType": "line",
+        "category": "topic",
+        "categoryType": "msg",
+        "xAxisLabel": "",
+        "xAxisProperty": "",
+        "xAxisPropertyType": "msg",
+        "xAxisType": "time",
+        "yAxisLabel": "%",
+        "ymin": "", "ymax": "",
+        "action": "append",
+        "stackSeries": false,
+        "pointShape": "circle",
+        "pointRadius": 3,
+        "showLegend": false,
+        "removeOlder": "5",
+        "removeOlderUnit": "60",
+        "removeOlderPoints": "",
+        "colors": ["#4CAF50"],
+        "textColor": ["#e0e0e0"],
+        "gridColor": ["#333333"],
+        "x": 610, "y": 400, "wires": [[]]
+    },
+
+    {"id": "c3", "type": "comment", "z": "opcua_full_flow",
+     "name": "═══ LED CONTROL (Dashboard → ESP32) ═══", "x": 250, "y": 460, "wires": []},
+
+    {
+        "id": "ui_led_switch",
+        "type": "ui-switch",
+        "z": "opcua_full_flow",
+        "group": "grp_controls",
+        "name": "LED Switch",
+        "label": "LED (GPIO15)",
+        "order": 1, "width": "6", "height": "1",
+        "passthru": false,
+        "decouple": false,
+        "topic": "led",
+        "topicType": "str",
+        "style": "",
+        "onvalue": "true", "onvalueType": "bool",
+        "onicon": "mdi-lightbulb", "oncolor": "#4CAF50",
+        "offvalue": "false", "offvalueType": "bool",
+        "officon": "mdi-lightbulb-outline", "offcolor": "#666666",
+        "x": 150, "y": 520,
+        "wires": [["fmt_led_opcua"]]
+    },
+    {
+        "id": "fmt_led_opcua",
+        "type": "function",
+        "z": "opcua_full_flow",
+        "name": "OPC UA LED Cmd",
+        "func": "var seq = flow.get('led_seq') || 0;\nseq++;\nflow.set('led_seq', seq);\n\nvar nm = {\n    'MessageId': String(seq),\n    'MessageType': 'ua-data',\n    'PublisherId': 'NodeRED-Dashboard',\n    'Messages': [{\n        'DataSetWriterId': 2001,\n        'SequenceNumber': seq,\n        'Payload': {\n            'LED': {\n                'Value': msg.payload,\n                'SourceTimestamp': new Date().toISOString()\n            }\n        }\n    }]\n};\n\nmsg.payload = JSON.stringify(nm);\nreturn msg;",
+        "outputs": 1,
+        "x": 380, "y": 520,
+        "wires": [["mqtt_out_cmd", "fmt_led_debug"]]
+    },
+    {
+        "id": "fmt_led_debug",
+        "type": "function",
+        "z": "opcua_full_flow",
+        "name": "→ debug",
+        "func": "var o = JSON.parse(msg.payload);\nvar v = o.Messages[0].Payload.LED.Value;\nmsg.payload = '[LED] ' + (v ? 'ON' : 'OFF');\nreturn msg;",
+        "outputs": 1,
+        "x": 570, "y": 560,
+        "wires": [["ui_debug"]]
+    },
+
+    {"id": "c4", "type": "comment", "z": "opcua_full_flow",
+     "name": "═══ SERVO CONTROL (Dashboard → ESP32) ═══", "x": 260, "y": 610, "wires": []},
+
+    {
+        "id": "ui_servo_slider",
+        "type": "ui-slider",
+        "z": "opcua_full_flow",
+        "group": "grp_controls",
+        "name": "Servo Slider",
+        "label": "Servo Angle",
+        "tooltip": "",
+        "order": 2, "width": "6", "height": "1",
+        "passthru": false,
+        "outs": "end",
+        "topic": "servo",
+        "topicType": "str",
+        "thumbLabel": "true",
+        "showTicks": "always",
+        "min": 0, "max": 180, "step": 5,
+        "x": 150, "y": 670,
+        "wires": [["fmt_servo_opcua"]]
+    },
+    {
+        "id": "fmt_servo_opcua",
+        "type": "function",
+        "z": "opcua_full_flow",
+        "name": "OPC UA Servo Cmd",
+        "func": "var seq = flow.get('servo_seq') || 0;\nseq++;\nflow.set('servo_seq', seq);\n\nvar nm = {\n    'MessageId': String(seq),\n    'MessageType': 'ua-data',\n    'PublisherId': 'NodeRED-Dashboard',\n    'Messages': [{\n        'DataSetWriterId': 2002,\n        'SequenceNumber': seq,\n        'Payload': {\n            'Servo': {\n                'Value': msg.payload,\n                'SourceTimestamp': new Date().toISOString()\n            }\n        }\n    }]\n};\n\nmsg.payload = JSON.stringify(nm);\nreturn msg;",
+        "outputs": 1,
+        "x": 390, "y": 670,
+        "wires": [["mqtt_out_cmd", "fmt_servo_debug"]]
+    },
+    {
+        "id": "fmt_servo_debug",
+        "type": "function",
+        "z": "opcua_full_flow",
+        "name": "→ debug",
+        "func": "var o = JSON.parse(msg.payload);\nvar v = o.Messages[0].Payload.Servo.Value;\nmsg.payload = '[SERVO] ' + v + '°';\nreturn msg;",
+        "outputs": 1,
+        "x": 570, "y": 710,
+        "wires": [["ui_debug"]]
+    },
+
+    {
+        "id": "mqtt_out_cmd",
+        "type": "mqtt out",
+        "z": "opcua_full_flow",
+        "name": "→ ESP32 Cmd",
+        "topic": "opcua/json/nodered/cmd",
+        "qos": "0", "retain": "false",
+        "broker": "mqtt_broker",
+        "x": 590, "y": 520,
+        "wires": []
+    },
+
+    {"id": "c5", "type": "comment", "z": "opcua_full_flow",
+     "name": "═══ DEBUG ═══", "x": 170, "y": 770, "wires": []},
+
+    {
+        "id": "ui_debug",
+        "type": "ui-text",
+        "z": "opcua_full_flow",
+        "group": "grp_debug",
+        "name": "Last Message",
+        "order": 1, "width": "12", "height": "1",
+        "label": "Last:",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "font": "monospace", "fontSize": 13, "color": "#b0b0b0",
+        "x": 280, "y": 810, "wires": []
+    }
+]
