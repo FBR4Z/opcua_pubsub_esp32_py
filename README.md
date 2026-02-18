@@ -205,7 +205,6 @@ opcua_pubsub_esp32_py/
 │                                   #   ESPTransport — smallest RAM footprint
 │
 ├── examples/
-│   ├── main.py                     # Simple JSON publisher using opcua_micro
 │   └── lcd_display/                # LCD 16x2 I2C example with data type cycling
 │       ├── main.py                 # Application loop with LCD feedback
 │       ├── boot.py                 # WiFi init with LCD status display
