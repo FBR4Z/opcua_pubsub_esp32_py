@@ -1,0 +1,7 @@
+# Credentials
+config.py
+
+# Generated at runtime
+*.aasx
+*.json
+__pycache__/
