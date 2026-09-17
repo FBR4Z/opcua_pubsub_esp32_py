@@ -8,6 +8,10 @@
 </p>
 
 <p align="center">
+  <a href="https://doi.org/10.5281/zenodo.22804060"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.22804060.svg" alt="DOI"/></a>
+</p>
+
+<p align="center">
   <strong>The first MicroPython implementation of OPC UA PubSub (IEC 62541-14)</strong><br>
   Enabling industrial IoT on resource-constrained devices
 </p>
