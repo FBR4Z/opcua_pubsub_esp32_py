@@ -215,6 +215,9 @@ opcua_pubsub_esp32_py/
 │       ├── README.md               # Documentação do exemplo (EN)
 │       └── README_PT.md            # Documentação do exemplo (PT)
 │
+├── ot_modbus_server/               # Firmware OT (ESP-IDF, C): braço, esteira, HC-SR04, LCD,
+│                                   #   servidor Modbus RTU lido pelo examples/modbus_gateway
+│
 ├── benchmarks/                     # Suite de comparação de performance
 │   ├── benchmark_leve.py           # Benchmark JSON vs UADP (executa no ESP32)
 │   └── echo_server.py             # Servidor echo no PC para medição de latência RTT
@@ -231,6 +234,7 @@ opcua_pubsub_esp32_py/
 - **[examples/lcd_display/README.md](examples/lcd_display/README.md)** — Guia de ligação, configuração e uso do exemplo com LCD.
 - **[examples/node-red/README.md](examples/node-red/README.md)** — Exemplo mínimo bidirecional Node-RED (botão + LED).
 - **[examples/nodered-dashboard/README.md](examples/nodered-dashboard/README.md)** — Dashboard Node-RED completo com sensores, gauges, gráficos e controle de atuadores.
+- **[ot_modbus_server/README.md](ot_modbus_server/README.md)** — Firmware OT da célula robótica (ESP-IDF): registradores Modbus, pinagem e gravação.
 
 ---
 

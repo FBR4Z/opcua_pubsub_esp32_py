@@ -215,6 +215,9 @@ opcua_pubsub_esp32_py/
 │       ├── README.md               # Example documentation (EN)
 │       └── README_PT.md            # Example documentation (PT)
 │
+├── ot_modbus_server/               # OT firmware (ESP-IDF, C): robot arm, conveyor, HC-SR04, LCD,
+│                                   #   Modbus RTU server polled by examples/modbus_gateway
+│
 ├── benchmarks/                     # Performance comparison suite
 │   ├── benchmark_leve.py           # JSON vs UADP benchmark (runs on ESP32)
 │   └── echo_server.py             # PC-side echo server for latency RTT measurement
@@ -231,6 +234,7 @@ opcua_pubsub_esp32_py/
 - **[examples/lcd_display/README.md](examples/lcd_display/README.md)** — LCD example wiring, setup, and usage guide.
 - **[examples/node-red/README.md](examples/node-red/README.md)** — Minimal bidirectional Node-RED example (button + LED).
 - **[examples/nodered-dashboard/README.md](examples/nodered-dashboard/README.md)** — Full Node-RED dashboard with sensors, gauges, charts and actuator control.
+- **[ot_modbus_server/README.md](ot_modbus_server/README.md)** — OT firmware of the robotic cell (ESP-IDF): Modbus registers, pinout and flashing (in Portuguese).
 
 ---
 

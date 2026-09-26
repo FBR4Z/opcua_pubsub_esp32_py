@@ -34,6 +34,9 @@ Desktop.ini
 
 # Build artifacts
 build/
+managed_components/
+sdkconfig.old
+.clangd
 dist/
 *.egg-info/
 
