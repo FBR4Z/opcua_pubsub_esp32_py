@@ -1,20 +1,20 @@
 """
 OPC UA PubSub Lite - MicroPython Implementation
-ImplementaÃ§Ã£o do OPC UA Part 14 (PubSub) sobre MQTT para ESP32
+Implementação do OPC UA Part 14 (PubSub) sobre MQTT para ESP32
 
 Autor: Fabio
-Projeto: DissertaÃ§Ã£o de Mestrado
+Projeto: Dissertação de Mestrado
 """
 
 import ujson
 import time
 
 # =============================================================================
-# StatusCode - CÃ³digos de qualidade OPC UA (Part 4)
+# StatusCode - Códigos de qualidade OPC UA (Part 4)
 # =============================================================================
 
 class StatusCode:
-    """CÃ³digos de status OPC UA simplificados."""
+    """Códigos de status OPC UA simplificados."""
     GOOD = 0x00000000
     UNCERTAIN = 0x40000000
     BAD = 0x80000000
@@ -58,12 +58,12 @@ class DataValue:
         )
     
     def to_dict(self):
-        """Converte para dicionÃ¡rio no formato OPC UA JSON."""
+        """Converte para dicionário no formato OPC UA JSON."""
         result = {
             "Value": self.value,
             "SourceTimestamp": self.source_timestamp
         }
-        # SÃ³ inclui StatusCode se nÃ£o for GOOD (otimizaÃ§Ã£o)
+        # Só inclui StatusCode se não for GOOD (otimização)
         if self.status_code != StatusCode.GOOD:
             result["StatusCode"] = self.status_code
         return result
@@ -76,7 +76,7 @@ class DataValue:
 class DataSetMessage:
     """
     Representa uma DataSetMessage do OPC UA PubSub.
-    ContÃ©m os dados de um Ãºnico DataSetWriter.
+    Contém os dados de um único DataSetWriter.
     """
     
     def __init__(self, dataset_writer_id, sequence_number=1):
@@ -93,7 +93,7 @@ class DataSetMessage:
             self.payload[field_name] = DataValue(data_value).to_dict()
     
     def to_dict(self):
-        """Converte para dicionÃ¡rio no formato OPC UA JSON."""
+        """Converte para dicionário no formato OPC UA JSON."""
         return {
             "DataSetWriterId": self.dataset_writer_id,
             "SequenceNumber": self.sequence_number,
@@ -108,7 +108,7 @@ class DataSetMessage:
 class NetworkMessage:
     """
     Representa uma NetworkMessage do OPC UA PubSub Part 14.
-    Este Ã© o envelope principal que contÃ©m uma ou mais DataSetMessages.
+    Este é o envelope principal que contém uma ou mais DataSetMessages.
     """
     
     MESSAGE_TYPE_DATA = "ua-data"
@@ -121,11 +121,11 @@ class NetworkMessage:
         self.messages = []
     
     def add_dataset_message(self, dataset_message):
-        """Adiciona uma DataSetMessage Ã  NetworkMessage."""
+        """Adiciona uma DataSetMessage à NetworkMessage."""
         self.messages.append(dataset_message)
     
     def to_dict(self):
-        """Converte para dicionÃ¡rio no formato OPC UA JSON (Part 14)."""
+        """Converte para dicionário no formato OPC UA JSON (Part 14)."""
         return {
             "MessageId": self.message_id,
             "MessageType": self.message_type,
@@ -145,15 +145,15 @@ class NetworkMessage:
 class OPCUAPublisher:
     """
     Publisher OPC UA PubSub sobre MQTT.
-    Gerencia a conexÃ£o MQTT e publicaÃ§Ã£o de mensagens.
+    Gerencia a conexão MQTT e publicação de mensagens.
     """
     
     def __init__(self, publisher_id, mqtt_client, base_topic="opcua/data"):
         """
         Args:
-            publisher_id: Identificador Ãºnico do publisher
-            mqtt_client: InstÃ¢ncia de MQTTClient jÃ¡ configurada
-            base_topic: TÃ³pico MQTT base para publicaÃ§Ã£o
+            publisher_id: Identificador único do publisher
+            mqtt_client: Instância de MQTTClient já configurada
+            base_topic: Tópico MQTT base para publicação
         """
         self.publisher_id = publisher_id
         self.mqtt = mqtt_client
@@ -188,14 +188,14 @@ class OPCUAPublisher:
         
         Args:
             dataset_writer_id: ID do DataSetWriter
-            data_dict: DicionÃ¡rio {campo: valor} ou {campo: DataValue}
-            topic_suffix: Sufixo opcional para o tÃ³pico
+            data_dict: Dicionário {campo: valor} ou {campo: DataValue}
+            topic_suffix: Sufixo opcional para o tópico
         
         Returns:
             bool: True se publicou com sucesso
         """
         if not self.connected:
-            print("[OPCUAPublisher] NÃ£o conectado!")
+            print("[OPCUAPublisher] Não conectado!")
             return False
         
         try:
@@ -236,7 +236,7 @@ class OPCUAPublisher:
     
     def publish_with_quality(self, dataset_writer_id, data_with_quality, topic_suffix=None):
         """
-        Publica dados com informaÃ§Ã£o de qualidade explÃ­cita.
+        Publica dados com informação de qualidade explícita.
         
         Args:
             dataset_writer_id: ID do DataSetWriter

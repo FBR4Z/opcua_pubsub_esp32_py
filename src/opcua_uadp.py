@@ -1,16 +1,16 @@
 """
 OPC UA PubSub UADP Encoding - MicroPython Implementation
-ImplementaÃ§Ã£o do OPC UA Part 14 (PubSub) com UADP Binary Encoding para ESP32
+Implementação do OPC UA Part 14 (PubSub) com UADP Binary Encoding para ESP32
 
-Autor: FÃ¡bio
-Projeto: DissertaÃ§Ã£o de Mestrado - UEA
-VersÃ£o: 1.0 - UADP Binary Encoding
+Autor: Fábio
+Projeto: Dissertação de Mestrado - UEA
+Versão: 1.0 - UADP Binary Encoding
 
-ReferÃªncias:
+Referências:
 - OPC UA Part 14: PubSub (IEC 62541-14)
 - OPC UA Part 6: Mappings (Binary encoding)
 
-Este mÃ³dulo complementa opcua_pubsub.py (JSON) com encoding binÃ¡rio UADP.
+Este módulo complementa opcua_pubsub.py (JSON) com encoding binário UADP.
 """
 
 import ustruct
@@ -38,7 +38,7 @@ class OPCUATypes:
     GUID = 14
     BYTESTRING = 15
     
-    # Mapeamento Python â†’ OPC UA
+    # Mapeamento Python → OPC UA
     @staticmethod
     def from_python(value):
         """Infere tipo OPC UA a partir de valor Python."""
@@ -68,7 +68,7 @@ class OPCUATypes:
 # =============================================================================
 
 class StatusCode:
-    """CÃ³digos de status OPC UA Part 4."""
+    """Códigos de status OPC UA Part 4."""
     GOOD = 0x00000000
     UNCERTAIN = 0x40000000
     BAD = 0x80000000
@@ -120,7 +120,7 @@ class UADPDataSetFlags:
 # =============================================================================
 
 class UADPEncoder:
-    """Encoder para valores OPC UA em formato binÃ¡rio."""
+    """Encoder para valores OPC UA em formato binário."""
     
     @staticmethod
     def encode_boolean(value):
@@ -195,8 +195,8 @@ class UADPEncoder:
             # Usa tempo atual
             # MicroPython time.time() retorna segundos desde 2000-01-01
             # Precisamos converter para FILETIME
-            # DiferenÃ§a 1601 â†’ 2000 = 12591158400 segundos
-            EPOCH_DIFF = 12591158400 + 946684800  # 1601â†’1970 + 1970â†’2000
+            # Diferença 1601 → 2000 = 12591158400 segundos
+            EPOCH_DIFF = 12591158400 + 946684800  # 1601→1970 + 1970→2000
             try:
                 secs = time.time() + 946684800  # Converte para Unix epoch
                 filetime = (secs + 11644473600) * 10000000  # Para FILETIME
@@ -226,7 +226,7 @@ class UADPEncoder:
         
         Args:
             value: Valor Python
-            type_id: OPCUATypes (opcional, infere se nÃ£o fornecido)
+            type_id: OPCUATypes (opcional, infere se não fornecido)
         
         Returns:
             bytes: Valor codificado
@@ -264,7 +264,7 @@ class UADPEncoder:
 # =============================================================================
 
 class UADPDecoder:
-    """Decoder para valores OPC UA em formato binÃ¡rio."""
+    """Decoder para valores OPC UA em formato binário."""
     
     @staticmethod
     def decode_boolean(data, offset=0):
@@ -382,7 +382,7 @@ class UADPDecoder:
         if decoder:
             return decoder(data, offset)
         else:
-            raise ValueError(f"Tipo nÃ£o suportado: {type_id}")
+            raise ValueError(f"Tipo não suportado: {type_id}")
 
 
 # =============================================================================
@@ -465,8 +465,8 @@ class UADPDataValue:
 
 class UADPDataSetMessage:
     """
-    DataSetMessage em formato UADP binÃ¡rio.
-    ContÃ©m campos de um DataSet.
+    DataSetMessage em formato UADP binário.
+    Contém campos de um DataSet.
     """
     
     def __init__(self, dataset_writer_id, sequence_number=0):
@@ -481,7 +481,7 @@ class UADPDataSetMessage:
         Adiciona campo ao DataSet.
         
         Args:
-            name: Nome do campo (para referÃªncia, nÃ£o codificado em RawData)
+            name: Nome do campo (para referência, não codificado em RawData)
             value: Valor do campo
             type_id: Tipo OPC UA (opcional, infere automaticamente)
         """
@@ -515,7 +515,7 @@ class UADPDataSetMessage:
         buffer.extend(ustruct.pack('<H', self.sequence_number & 0xFFFF))
         
         # Payload: RawData encoding
-        # Cada campo Ã© codificado diretamente, sem tipo (subscriber precisa conhecer schema)
+        # Cada campo é codificado diretamente, sem tipo (subscriber precisa conhecer schema)
         for name, value, type_id in self.fields:
             buffer.extend(UADPEncoder.encode_value(value, type_id))
         
@@ -523,7 +523,7 @@ class UADPDataSetMessage:
     
     def encode_with_types(self):
         """
-        Codifica com informaÃ§Ã£o de tipos (Variant encoding).
+        Codifica com informação de tipos (Variant encoding).
         Maior mas auto-descritivo.
         """
         buffer = bytearray()
@@ -568,7 +568,7 @@ class UADPDataSetMessage:
 
 class UADPNetworkMessage:
     """
-    NetworkMessage em formato UADP binÃ¡rio.
+    NetworkMessage em formato UADP binário.
     Envelope principal contendo DataSetMessages.
     """
     
@@ -581,7 +581,7 @@ class UADPNetworkMessage:
         self.sequence_number = 0
         self.timestamp = None
         
-        # ConfiguraÃ§Ãµes de encoding
+        # Configurações de encoding
         self.include_group_header = True
         self.include_payload_header = True
         self.publisher_id_type = UADPFlags.PUBLISHER_ID_STRING
@@ -595,7 +595,7 @@ class UADPNetworkMessage:
         Codifica NetworkMessage completa em UADP.
         
         Returns:
-            bytes: Mensagem UADP binÃ¡ria
+            bytes: Mensagem UADP binária
         """
         buffer = bytearray()
         
@@ -610,7 +610,7 @@ class UADPNetworkMessage:
             flags |= UADPFlags.PAYLOAD_HEADER_ENABLED
         buffer.append(flags)
         
-        # Extended Flags (nÃ£o usado nesta versÃ£o simplificada)
+        # Extended Flags (não usado nesta versão simplificada)
         
         # PublisherId
         if isinstance(self.publisher_id, str):
@@ -673,16 +673,16 @@ class UADPNetworkMessage:
     
     def encode_minimal(self):
         """
-        Encoding mÃ­nimo para mÃ¡xima eficiÃªncia.
+        Encoding mínimo para máxima eficiência.
         Remove headers opcionais.
         """
         buffer = bytearray()
         
-        # Flags mÃ­nimas
+        # Flags mínimas
         flags = self.VERSION | UADPFlags.PUBLISHER_ID_ENABLED
         buffer.append(flags)
         
-        # PublisherId como byte se possÃ­vel
+        # PublisherId como byte se possível
         if isinstance(self.publisher_id, int) and self.publisher_id <= 255:
             buffer.append(UADPFlags.PUBLISHER_ID_BYTE)
             buffer.append(self.publisher_id)
@@ -710,7 +710,7 @@ class UADPNetworkMessage:
             data: bytes da mensagem
         
         Returns:
-            UADPNetworkMessage ou None se invÃ¡lido
+            UADPNetworkMessage ou None se inválido
         """
         if len(data) < 2:
             return None
@@ -724,7 +724,7 @@ class UADPNetworkMessage:
         
         version = flags & UADPFlags.VERSION_MASK
         if version != 1:
-            print(f"[UADP] VersÃ£o nÃ£o suportada: {version}")
+            print(f"[UADP] Versão não suportada: {version}")
             return None
         
         has_publisher_id = flags & UADPFlags.PUBLISHER_ID_ENABLED
@@ -777,7 +777,7 @@ class UADPNetworkMessage:
                 writer_ids.append(wid)
                 offset += 2
         
-        # Nota: DecodificaÃ§Ã£o completa de DataSetMessages requer
+        # Nota: Decodificação completa de DataSetMessages requer
         # conhecimento do schema (tipos dos campos)
         # Por enquanto, armazenamos os bytes restantes
         msg._raw_payload = data[offset:]
@@ -794,15 +794,15 @@ class UADPNetworkMessage:
 class UADPPublisher:
     """
     Publisher OPC UA PubSub com UADP encoding sobre MQTT.
-    Interface similar ao OPCUAPublisher (JSON) para fÃ¡cil migraÃ§Ã£o.
+    Interface similar ao OPCUAPublisher (JSON) para fácil migração.
     """
     
     def __init__(self, publisher_id, mqtt_client, base_topic="opcua/uadp"):
         """
         Args:
             publisher_id: Identificador do publisher (string ou int)
-            mqtt_client: InstÃ¢ncia MQTTClient configurada
-            base_topic: TÃ³pico MQTT base
+            mqtt_client: Instância MQTTClient configurada
+            base_topic: Tópico MQTT base
         """
         self.publisher_id = publisher_id
         self.mqtt = mqtt_client
@@ -811,7 +811,7 @@ class UADPPublisher:
         self.connected = False
         self.writer_group_id = 1
         
-        # EstatÃ­sticas
+        # Estatísticas
         self.bytes_sent = 0
     
     def connect(self):
@@ -842,13 +842,13 @@ class UADPPublisher:
         Args:
             dataset_writer_id: ID do DataSetWriter
             data_dict: Dict {campo: valor} ou {campo: (valor, tipo)}
-            topic_suffix: Sufixo opcional para tÃ³pico
+            topic_suffix: Sufixo opcional para tópico
         
         Returns:
             bool: True se publicou com sucesso
         """
         if not self.connected:
-            print("[UADPPublisher] NÃ£o conectado!")
+            print("[UADPPublisher] Não conectado!")
             return False
         
         try:
@@ -870,7 +870,7 @@ class UADPPublisher:
             # Adiciona campos
             for field_name, value in data_dict.items():
                 if isinstance(value, tuple):
-                    # (valor, tipo) explÃ­cito
+                    # (valor, tipo) explícito
                     ds_msg.add_field(field_name, value[0], value[1])
                 elif isinstance(value, UADPDataValue):
                     ds_msg.add_data_value(field_name, value)
@@ -900,7 +900,7 @@ class UADPPublisher:
     
     def publish_minimal(self, dataset_writer_id, data_dict, topic_suffix=None):
         """
-        Publica com encoding mÃ­nimo para mÃ¡xima eficiÃªncia.
+        Publica com encoding mínimo para máxima eficiência.
         """
         if not self.connected:
             return False
@@ -921,7 +921,7 @@ class UADPPublisher:
             
             net_msg.add_dataset_message(ds_msg)
             
-            # Usa encoding mÃ­nimo
+            # Usa encoding mínimo
             payload = net_msg.encode_minimal()
             
             topic = self.base_topic
@@ -938,7 +938,7 @@ class UADPPublisher:
             return False
     
     def get_stats(self):
-        """Retorna estatÃ­sticas."""
+        """Retorna estatísticas."""
         return {
             "messages_sent": self.message_count,
             "bytes_sent": self.bytes_sent,
@@ -966,7 +966,7 @@ class UADPSubscriber:
         self._on_raw_callback = None
         self._on_error_callback = None
         
-        # EstatÃ­sticas
+        # Estatísticas
         self.stats = {
             "received": 0,
             "decoded": 0,
@@ -996,7 +996,7 @@ class UADPSubscriber:
             pass
     
     def subscribe(self, topic="opcua/uadp/#"):
-        """Inscreve em tÃ³pico."""
+        """Inscreve em tópico."""
         if not self.connected:
             return False
         
@@ -1062,7 +1062,7 @@ class UADPSubscriber:
                 self._on_error_callback(str(e), payload)
     
     def check_messages(self):
-        """Verifica mensagens pendentes (nÃ£o-bloqueante)."""
+        """Verifica mensagens pendentes (não-bloqueante)."""
         if not self.connected:
             return
         try:
@@ -1071,7 +1071,7 @@ class UADPSubscriber:
             pass
     
     def wait_message(self):
-        """Aguarda prÃ³xima mensagem (bloqueante)."""
+        """Aguarda próxima mensagem (bloqueante)."""
         if not self.connected:
             return
         try:
@@ -1080,12 +1080,12 @@ class UADPSubscriber:
             pass
     
     def get_stats(self):
-        """Retorna estatÃ­sticas."""
+        """Retorna estatísticas."""
         return self.stats.copy()
 
 
 # =============================================================================
-# FunÃ§Ãµes UtilitÃ¡rias
+# Funções Utilitárias
 # =============================================================================
 
 def compare_encoding_size(data_dict):
@@ -1148,7 +1148,7 @@ def benchmark_encoding(num_iterations=100, num_fields=5):
     Benchmark de performance: JSON vs UADP.
     
     Returns:
-        dict com tempos de serializaÃ§Ã£o
+        dict com tempos de serialização
     """
     import ujson
     
@@ -1236,13 +1236,13 @@ def benchmark_encoding(num_iterations=100, num_fields=5):
 # =============================================================================
 
 def example_usage():
-    """Demonstra uso bÃ¡sico do UADP."""
+    """Demonstra uso básico do UADP."""
     print("\n" + "="*50)
     print("OPC UA PubSub UADP - Exemplo")
     print("="*50)
     
     # 1. Comparar tamanhos
-    print("\n[1] ComparaÃ§Ã£o de tamanho JSON vs UADP:")
+    print("\n[1] Comparação de tamanho JSON vs UADP:")
     data = {
         "Temperature": 25.5,
         "Humidity": 60,
@@ -1257,12 +1257,12 @@ def example_usage():
     print(f"    UADP Minimal: {comparison['uadp_minimal_bytes']} bytes ({comparison['savings_minimal_percent']}% menor)")
     print(f"    Ratio:        {comparison['ratio']}x")
     
-    # 2. Benchmark de serializaÃ§Ã£o
-    print("\n[2] Benchmark de serializaÃ§Ã£o (100 iteraÃ§Ãµes, 5 campos):")
+    # 2. Benchmark de serialização
+    print("\n[2] Benchmark de serialização (100 iterações, 5 campos):")
     bench = benchmark_encoding(100, 5)
-    print(f"    JSON:         {bench['json']['mean_us']:.1f} Âµs")
-    print(f"    UADP:         {bench['uadp']['mean_us']:.1f} Âµs ({bench['speedup']}x mais rÃ¡pido)")
-    print(f"    UADP Minimal: {bench['uadp_minimal']['mean_us']:.1f} Âµs ({bench['speedup_minimal']}x mais rÃ¡pido)")
+    print(f"    JSON:         {bench['json']['mean_us']:.1f} µs")
+    print(f"    UADP:         {bench['uadp']['mean_us']:.1f} µs ({bench['speedup']}x mais rápido)")
+    print(f"    UADP Minimal: {bench['uadp_minimal']['mean_us']:.1f} µs ({bench['speedup_minimal']}x mais rápido)")
     
     # 3. Criar mensagem UADP
     print("\n[3] Criando mensagem UADP:")
@@ -1287,10 +1287,10 @@ def example_usage():
         print(f"    WriterGroupId: {decoded.writer_group_id}")
         print(f"    DataSetMessages: {decoded._ds_count}")
     
-    print("\n[OK] MÃ³dulo UADP funcionando!")
+    print("\n[OK] Módulo UADP funcionando!")
     return True
 
 
-# Executa exemplo ao importar (pode comentar em produÃ§Ã£o)
+# Executa exemplo ao importar (pode comentar em produção)
 if __name__ == "__main__":
     example_usage()
