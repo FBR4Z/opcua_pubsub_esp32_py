@@ -15,8 +15,10 @@ Pré-requisitos no dispositivo (via Thonny):
 
 import time
 import network
+from machine import I2C, Pin
 from umqtt.simple import MQTTClient
 
+from lcd_i2c_test import LCD_I2C
 from modbus_rtu_client import ModbusRTUClient
 from opcua_pubsub import OPCUAPublisher
 
@@ -53,6 +55,36 @@ REG_COUNT         = 7
 # UART2 — cruzado com o OT (OT TX=17 -> IT RX=16, OT RX=16 <- IT TX=17)
 modbus = ModbusRTUClient(uart_id=2, tx=17, rx=16, baudrate=115200, timeout_ms=200)
 
+# ============================================================
+# LCD I2C (PCF8574) — mesmos pinos do lcd_i2c_test.py
+# ============================================================
+LCD_SDA = 21
+LCD_SCL = 22
+# "á" não existe na ROM do HD44780: desenhado no caractere 0 da CGRAM
+A_AGUDO = [0x02, 0x04, 0x0E, 0x01, 0x0F, 0x11, 0x0F, 0x00]
+
+
+def lcd_saudacao():
+    """Mostra "Oi Fábio" no LCD. Sem LCD, o gateway segue normalmente."""
+    try:
+        i2c = I2C(0, scl=Pin(LCD_SCL), sda=Pin(LCD_SDA), freq=400000)
+        devices = i2c.scan()
+        if not devices:
+            print("[lcd] nenhum dispositivo I2C")
+            return None
+        lcd = LCD_I2C(i2c, addr=devices[0])
+        lcd.create_char(0, A_AGUDO)
+        lcd.clear()
+        lcd.set_cursor(4, 0)
+        lcd.write("Oi F")
+        lcd.write_char(0)
+        lcd.write("bio")
+        print("[lcd] Oi Fabio")
+        return lcd
+    except Exception as e:
+        print("[lcd] erro:", e)
+        return None
+
 
 def wifi_connect(ssid, password, timeout_ms=15000):
     sta = network.WLAN(network.STA_IF)
@@ -87,6 +119,7 @@ def poll_once():
 
 
 def main():
+    lcd_saudacao()
     wifi_connect(WIFI_SSID, WIFI_PASSWORD)
 
     mqtt_client = MQTTClient(
