@@ -15,7 +15,9 @@ typedef enum {
     HOLD_REG_GARRA_ANG     = 3,  // ângulo atual do servo Garra      (graus, 0-180)
     HOLD_REG_ESTEIRA_VEL   = 4,  // velocidade da esteira            (%, 0-100)
     HOLD_REG_ESTEIRA_STATE = 5,  // 0 = parada, 1 = girando
-    HOLD_REG_SENSOR_DIST   = 6,  // distância HC-SR04                (cm, quando integrado)
+    HOLD_REG_SENSOR_DIST   = 6,  // distância HC-SR04                (cm, 0xFFFF = sem leitura)
+    HOLD_REG_CYCLE_COUNT   = 7,  // ciclos pick-and-place completos  (contador, volta a 0 após 65535)
+    HOLD_REG_AUTO_FASE     = 8,  // fase do ciclo automático         (auto_fase_t, 0 = parado)
 
     HOLD_REG_COUNT              // total de registradores — manter por último
 } holding_reg_offset_t;
@@ -32,6 +34,8 @@ typedef struct __attribute__((packed)) {
     uint16_t esteira_vel;
     uint16_t esteira_state;
     uint16_t sensor_dist;
+    uint16_t cycle_count;
+    uint16_t auto_fase;
 } modbus_holding_regs_t;
 
 _Static_assert(sizeof(modbus_holding_regs_t) == HOLD_REG_COUNT * sizeof(uint16_t),

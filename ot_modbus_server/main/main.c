@@ -12,12 +12,13 @@
 #include "hc_sr04_driver.h"
 #include "lcd_driver.h"
 #include "hmi_buttons.h"
+#include "auto_cycle.h"
 #include "console_cmds.h"
 
 static const char *TAG = "ot_modbus_server";
 
 // Versão exibida no log de boot — atualizar a cada gravação na bancada.
-#define FW_VERSION  "2026-09-26 (gravado via Iris)"
+#define FW_VERSION  "2026-11-07 ciclo automatico, poses calibradas (gravado via Iris)"
 
 // ============================================================
 // CONFIGURAÇÃO
@@ -59,6 +60,11 @@ static void *slave_handle = NULL;
 // ângulos dos servos.
 static volatile int s_last_dist_cm = -1;
 
+static int last_dist_cm(void)
+{
+    return s_last_dist_cm;
+}
+
 static void setup_reg_area(void)
 {
     mb_register_area_descriptor_t reg_area = {
@@ -93,6 +99,8 @@ static void control_task(void *pv)
         // 0xFFFF = "sem leitura" (sensor nunca leu ou deu timeout) — distingue
         // de uma leitura real de 0cm (objeto colado no sensor).
         holding_reg_area[HOLD_REG_SENSOR_DIST]   = (s_last_dist_cm < 0) ? 0xFFFF : (uint16_t)s_last_dist_cm;
+        holding_reg_area[HOLD_REG_CYCLE_COUNT]   = auto_cycle_get_count();
+        holding_reg_area[HOLD_REG_AUTO_FASE]     = (uint16_t)auto_cycle_get_fase();
 
         xSemaphoreGive(reg_mutex);
 
@@ -145,6 +153,7 @@ void app_main(void)
     conveyor_driver_init();
     hc_sr04_driver_init();
     lcd_driver_init();
+    auto_cycle_init(last_dist_cm);
     hmi_buttons_start();
     console_cmds_start();
 

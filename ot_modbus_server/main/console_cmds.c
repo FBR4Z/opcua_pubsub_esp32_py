@@ -11,6 +11,7 @@
 #include "conveyor_driver.h"
 #include "hc_sr04_driver.h"
 #include "lcd_driver.h"
+#include "auto_cycle.h"
 
 static const char *TAG = "console_cmds";
 
@@ -42,6 +43,10 @@ static int cmd_eixo(int argc, char **argv)
 // ============================================================
 static int cmd_ir(int argc, char **argv)
 {
+    if (auto_cycle_is_running()) {
+        printf("Ciclo automatico rodando: use `auto off` antes\n");
+        return 1;
+    }
     if (argc < 2) {
         printf("Uso: ir <angulo 0-180>\n");
         return 1;
@@ -78,6 +83,10 @@ static int cmd_ler(int argc, char **argv)
 // ============================================================
 static int cmd_soltar(int argc, char **argv)
 {
+    if (auto_cycle_is_running()) {
+        printf("Ciclo automatico rodando: use `auto off` antes\n");
+        return 1;
+    }
     servo_release(s_eixo_ativo);
     printf("%s solto\n", servo_axis_name(s_eixo_ativo));
     return 0;
@@ -93,6 +102,10 @@ static int cmd_esteira(int argc, char **argv)
         printf("Estado atual: %s, vel=%d%%\n",
                conveyor_is_running() ? "ligada" : "parada", conveyor_get_speed());
         return 0;
+    }
+    if (auto_cycle_is_running()) {
+        printf("Ciclo automatico rodando: use `auto off` antes\n");
+        return 1;
     }
     if (strcmp(argv[1], "off") == 0) {
         conveyor_stop();
@@ -149,6 +162,63 @@ static int cmd_lcd_test(int argc, char **argv)
 {
     lcd_test();
     return 0;
+}
+
+// ============================================================
+// auto <on|off|status|pose <nome>|garra <aberta|fechada>|limiar <cm>|esteira <s>>
+// ============================================================
+static int cmd_auto(int argc, char **argv)
+{
+    if (argc < 2 || strcmp(argv[1], "status") == 0) {
+        auto_cycle_print_status();
+        return 0;
+    }
+    if (strcmp(argv[1], "on") == 0) {
+        if (!auto_cycle_start()) {
+            printf("Ciclo automatico ja esta rodando\n");
+            return 1;
+        }
+        printf("Ciclo automatico ligado (auto off para parar)\n");
+        return 0;
+    }
+    if (strcmp(argv[1], "off") == 0) {
+        auto_cycle_stop();
+        printf("Parando o ciclo automatico (servos ficam onde estao)\n");
+        return 0;
+    }
+    if (strcmp(argv[1], "pose") == 0 && argc >= 3) {
+        return auto_cycle_save_pose(argv[2]) ? 0 : 1;
+    }
+    if (strcmp(argv[1], "garra") == 0 && argc >= 3) {
+        if (strcmp(argv[2], "aberta") == 0) {
+            return auto_cycle_save_garra(false) ? 0 : 1;
+        }
+        if (strcmp(argv[2], "fechada") == 0) {
+            return auto_cycle_save_garra(true) ? 0 : 1;
+        }
+    }
+    if (strcmp(argv[1], "limiar") == 0 && argc >= 3) {
+        int cm = atoi(argv[2]);
+        if (cm < 2 || cm > 200) {
+            printf("Limiar fora da faixa 2-200 cm: %d\n", cm);
+            return 1;
+        }
+        auto_cycle_set_limiar_cm(cm);
+        printf("Limiar da peca -> %d cm\n", cm);
+        return 0;
+    }
+    if (strcmp(argv[1], "esteira") == 0 && argc >= 3) {
+        int seg = atoi(argv[2]);
+        if (seg < 1 || seg > 60) {
+            printf("Tempo da esteira fora da faixa 1-60 s: %d\n", seg);
+            return 1;
+        }
+        auto_cycle_set_esteira_s(seg);
+        printf("Esteira gira %d s apos receber a peca\n", seg);
+        return 0;
+    }
+    printf("Uso: auto <on|off|status|pose <nome>|garra <aberta|fechada>|limiar <cm>|esteira <s>>\n");
+    return 1;
 }
 
 static void register_commands(void)
@@ -216,6 +286,14 @@ static void register_commands(void)
         .func = &cmd_lcd_test,
     };
     ESP_ERROR_CHECK(esp_console_cmd_register(&cmd_lcd_test_def));
+
+    const esp_console_cmd_t cmd_auto_def = {
+        .command = "auto",
+        .help = "Ciclo automatico: auto <on|off|status|pose <nome>|garra <aberta|fechada>|limiar <cm>|esteira <s>>",
+        .hint = NULL,
+        .func = &cmd_auto,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&cmd_auto_def));
 }
 
 void console_cmds_start(void)
@@ -233,5 +311,5 @@ void console_cmds_start(void)
     ESP_ERROR_CHECK(esp_console_new_repl_uart(&uart_config, &repl_config, &repl));
     ESP_ERROR_CHECK(esp_console_start_repl(repl));
 
-    ESP_LOGI(TAG, "Console pronto. Comandos: eixo, ir, ler, soltar, help");
+    ESP_LOGI(TAG, "Console pronto. Comandos: eixo, ir, ler, soltar, esteira, auto, help");
 }

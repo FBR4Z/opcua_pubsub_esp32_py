@@ -9,6 +9,7 @@
 #include "servo_driver.h"
 #include "conveyor_driver.h"
 #include "lcd_driver.h"
+#include "auto_cycle.h"
 
 static const char *TAG = "hmi_buttons";
 
@@ -17,9 +18,9 @@ static const char *TAG = "hmi_buttons";
 // já na placa — 3V3, nunca 5V. Não usar pull-up interno, GPIO34/35/36
 // nem têm essa opção em hardware.)
 // ============================================================
-#define BTN_CYCLE_GPIO   34   // cicla eixo: base->ombro->cotovelo->garra->esteira->base...
-#define BTN_INC_GPIO     35   // A: +1 grau (servo) ou +5% (esteira)
-#define BTN_DEC_GPIO     36   // B: -1 grau (servo) ou -5% (esteira)
+#define BTN_CYCLE_GPIO   34   // cicla item: base->ombro->cotovelo->garra->esteira->auto->base...
+#define BTN_INC_GPIO     35   // A: +1 grau (servo), +5% (esteira), liga/confirma peça (auto)
+#define BTN_DEC_GPIO     36   // B: -1 grau (servo), -5% (esteira), para o ciclo (auto)
 
 #define HMI_POLL_MS         10
 #define DEBOUNCE_THRESHOLD  3   // 3 * HMI_POLL_MS = 30ms estável antes de disparar
@@ -29,7 +30,8 @@ static const char *TAG = "hmi_buttons";
 
 // ============================================================
 // Eixos ciclados pela HMI — os 4 primeiros mapeiam direto pro enum
-// servo_axis_t (mesma ordem); o 5º é a esteira, tratada à parte.
+// servo_axis_t (mesma ordem); o 5º é a esteira e o 6º o modo automático,
+// tratados à parte.
 // ============================================================
 typedef enum {
     HMI_AXIS_BASE = 0,
@@ -37,10 +39,15 @@ typedef enum {
     HMI_AXIS_COTOVELO,
     HMI_AXIS_GARRA,
     HMI_AXIS_ESTEIRA,
+    HMI_AXIS_AUTO,
     HMI_AXIS_COUNT
 } hmi_axis_t;
 
 static hmi_axis_t s_axis_ativo = HMI_AXIS_BASE;
+
+// CYCLE apertado com o ciclo rodando: quando ele terminar de parar, a IHM
+// volta para o manual (Base).
+static bool s_sair_auto = false;
 
 static const char *hmi_axis_name(hmi_axis_t axis)
 {
@@ -50,6 +57,7 @@ static const char *hmi_axis_name(hmi_axis_t axis)
         case HMI_AXIS_COTOVELO: return "Cotovelo";
         case HMI_AXIS_GARRA:    return "Garra";
         case HMI_AXIS_ESTEIRA:  return "Esteira";
+        case HMI_AXIS_AUTO:     return "Auto";
         default:                return "?";
     }
 }
@@ -106,6 +114,11 @@ static void hmi_update_lcd(void)
     char line2_raw[17];
     char line2[17];
 
+    if (s_axis_ativo == HMI_AXIS_AUTO) {
+        auto_cycle_mostra_lcd();
+        return;
+    }
+
     snprintf(line1, sizeof(line1), "Eixo: %-10s", hmi_axis_name(s_axis_ativo));
 
     if (s_axis_ativo == HMI_AXIS_ESTEIRA) {
@@ -140,6 +153,34 @@ static void hmi_task(void *pv)
     while (1) {
         bool changed = false;
 
+        // Ciclo automático rodando (ligado pelo botão ou por `auto on` no
+        // console): o ciclo é dono dos servos, da esteira e do LCD. A confirma
+        // a peça, B para o ciclo e CYCLE para e volta ao manual.
+        if (auto_cycle_is_running()) {
+            s_axis_ativo = HMI_AXIS_AUTO;
+            if (button_check_pressed(&s_btn_inc)) {
+                ESP_LOGI(TAG, "botao A (auto): confirma peca");
+                auto_cycle_botao_a();
+            }
+            if (button_check_pressed(&s_btn_dec)) {
+                ESP_LOGI(TAG, "botao B (auto): para o ciclo");
+                auto_cycle_stop();
+            }
+            if (button_check_pressed(&s_btn_cycle)) {
+                ESP_LOGI(TAG, "botao CYCLE (auto): para e volta ao manual");
+                auto_cycle_stop();
+                s_sair_auto = true;
+            }
+            vTaskDelay(pdMS_TO_TICKS(HMI_POLL_MS));
+            continue;
+        }
+
+        if (s_sair_auto) {
+            s_sair_auto = false;
+            s_axis_ativo = HMI_AXIS_BASE;
+            hmi_update_lcd();
+        }
+
         if (button_check_pressed(&s_btn_cycle)) {
             ESP_LOGI(TAG, "botao CYCLE pressionado");
             s_axis_ativo = (hmi_axis_t)((s_axis_ativo + 1) % HMI_AXIS_COUNT);
@@ -148,7 +189,12 @@ static void hmi_task(void *pv)
 
         if (button_check_pressed(&s_btn_inc)) {
             ESP_LOGI(TAG, "botao INC pressionado");
-            if (s_axis_ativo == HMI_AXIS_ESTEIRA) {
+            if (s_axis_ativo == HMI_AXIS_AUTO) {
+                // Liga o ciclo; daqui em diante quem escreve no LCD é a auto_task
+                auto_cycle_start();
+                vTaskDelay(pdMS_TO_TICKS(HMI_POLL_MS));
+                continue;
+            } else if (s_axis_ativo == HMI_AXIS_ESTEIRA) {
                 int nova_vel = (int)conveyor_get_speed() + ESTEIRA_STEP_PCT;
                 if (nova_vel > 100) {
                     nova_vel = 100;
@@ -169,7 +215,9 @@ static void hmi_task(void *pv)
 
         if (button_check_pressed(&s_btn_dec)) {
             ESP_LOGI(TAG, "botao DEC pressionado");
-            if (s_axis_ativo == HMI_AXIS_ESTEIRA) {
+            if (s_axis_ativo == HMI_AXIS_AUTO) {
+                // ciclo parado: B não faz nada
+            } else if (s_axis_ativo == HMI_AXIS_ESTEIRA) {
                 int nova_vel = (int)conveyor_get_speed() - ESTEIRA_STEP_PCT;
                 if (nova_vel <= 0) {
                     conveyor_stop();
