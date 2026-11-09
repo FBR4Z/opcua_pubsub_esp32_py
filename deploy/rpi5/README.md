@@ -71,6 +71,10 @@ PC (w32time, sincronizado com `a.ntp.br`) → RPi (`chrony`, serve `192.168.0.0/
 
 ## Pendente
 
+- Hora no boot: sem bateria no RTC, o RPi liga com a hora do último desligamento e o `chrony` só
+  corrige ~20 s depois (teste de 2026-11-09: salto de 3035 s). `aas-gateway` e `nodered` sobem antes,
+  então as primeiras mensagens podem sair com hora errada. Opções: `After=time-sync.target` +
+  `chrony-wait.service` nos serviços, ou bateria ML-2020 no conector J5 do RPi 5.
 - Reserva DHCP de `192.168.0.2` para o MAC `88:a2:9e:10:6a:c2` na página do roteador.
 - `config.py` dos ESP32: Wi-Fi `OPC_UA`, `MQTT_BROKER = "192.168.0.2"` e `ntptime`.
 - Flow do Node-RED da célula (assinando `it/opcua/celula_robotica`).
