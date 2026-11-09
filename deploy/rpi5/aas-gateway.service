@@ -1,0 +1,19 @@
+# /etc/systemd/system/aas-gateway.service
+# examples/aas_digital_twin/aas_gateway.py como serviço: assina o MQTT local e
+# grava celula_robotica.aasx / celula_robotica_aas.json em WorkingDirectory.
+[Unit]
+Description=AAS gateway (OPC UA PubSub -> BaSyx)
+After=network-online.target mosquitto.service
+Wants=network-online.target mosquitto.service
+
+[Service]
+User=engfb
+WorkingDirectory=/home/engfb/aas
+ExecStart=/home/engfb/aas/venv/bin/python -u aas_gateway.py
+# O script só trata SIGINT (salva o .aasx final antes de sair)
+KillSignal=SIGINT
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
