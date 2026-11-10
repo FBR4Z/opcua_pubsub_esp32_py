@@ -140,7 +140,8 @@ RPi. Detalhes em [deploy/rpi5/README.md](../deploy/rpi5/README.md#hora-ntp).
 | Conexão TCP "meio morta" (RPi trocou de rede, pacotes somem) | PINGREQ a cada 5 s; sem PINGRESP em 12 s, ou escrita parada há 2 s, derruba e reconecta. Volta ~2 s depois de o caminho voltar |
 | RPi reinicia | Mosquitto, Node-RED, aas-gateway, chrony e BaSyx (Docker) sobem sozinhos; `wlan0` volta para a `OPC_UA` |
 | RPi liga sem a hora certa (sem bateria no RTC) | `chrony` corrige ~20 s depois do boot; as primeiras mensagens do AAS podem sair com hora errada |
-| BaSyx reinicia | o aas-gateway reenvia o AAS inteiro |
+| BaSyx reinicia ou sobe depois do aas-gateway | o aas-gateway reenvia o AAS inteiro (tenta a cada 1 s, mesmo sem mensagens) |
+| RPi liga antes do roteador | `wlan0` conecta quando o roteador aparece; com `ipv6.method link-local` não fica esperando IPv6 |
 
 ## Testes realizados (2026-11-09)
 

@@ -56,8 +56,13 @@ bash nr.sh --confirm-install --confirm-pi --nodered-user=engfb
 sudo systemctl enable --now nodered
 cd ~/.node-red && npm install @flowfuse/node-red-dashboard && sudo systemctl restart nodered
 
-sudo nmcli con modify netplan-eth0 ipv4.method auto ipv4.link-local fallback \
-     ipv4.may-fail yes ipv4.never-default yes ipv6.method link-local
+sudo nmcli con modify netplan-eth0 ipv4.method manual ipv4.addresses 169.254.14.189/16 \
+     ipv4.link-local disabled ipv4.may-fail yes ipv4.never-default yes ipv6.method link-local
+sudo nmcli --ask dev wifi connect OPC_UA ifname wlan0      # rodar pelo cabo (ssh rpi5)
+sudo nmcli con modify OPC_UA ipv4.method manual ipv4.addresses 192.168.0.2/24 \
+     ipv4.gateway 192.168.0.1 ipv4.dns 192.168.0.1 connection.autoconnect-priority 10 \
+     ipv6.method link-local   # sem isso, no boot fica esperando IPv6 do roteador e nao aplica o IPv4
+sudo nmcli con modify netplan-wlan0-FABIO connection.autoconnect no
 sudo systemctl set-default multi-user.target
 
 # servidor AAS (Eclipse BaSyx, ~1,9 GB de imagens; precisa de internet)
@@ -65,14 +70,15 @@ sudo apt-get install -y docker.io docker-compose && sudo usermod -aG docker engf
 mkdir -p ~/basyx && cp basyx/* ~/basyx/ && cd ~/basyx && sudo docker compose up -d
 
 # flow da célula (substitui todos os flows do Node-RED)
-curl -X POST http://localhost:1880/flows -H "Content-Type: application/json"      -H "Node-RED-Deployment-Type: full" --data @nodered-celula.json
+curl -X POST http://localhost:1880/flows -H "Content-Type: application/json" \
+     -H "Node-RED-Deployment-Type: full" --data @nodered-celula.json
 ```
 
 ## Hora (NTP)
 
 O RPi fica sem internet no `wlan0`, então a referência de hora é o PC pelo cabo:
 PC (w32time, sincronizado com `a.ntp.br`) → RPi (`chrony`, serve `192.168.0.0/24`) → ESP32
-(`ntptime.host = "192.168.0.2"`, pendente).
+(`ntptime`, no boot do gateway IT).
 
 - No PC, uma vez, como Administrador: [../pc/habilitar-servidor-ntp.ps1](../pc/habilitar-servidor-ntp.ps1)
   (liga o servidor NTP do Windows e abre UDP 123 e ping só para `169.254.0.0/16`).
@@ -82,7 +88,8 @@ PC (w32time, sincronizado com `a.ntp.br`) → RPi (`chrony`, serve `192.168.0.0/
 
 O `aas-gateway` cria o AAS no BaSyx ao iniciar (PUT, ou POST se ainda não existir) e atualiza
 `OperationalData` e `OPCUAPubSubInfo` 1x por segundo pela API AAS Part 2. O BaSyx guarda tudo em
-memória: se ele reiniciar, o gateway reenvia o AAS inteiro sozinho. O `.aasx` em `~/aas/` é
+memória: se ele reiniciar ou subir depois do gateway (boot), o gateway reenvia o AAS inteiro
+sozinho, tentando a cada 1 s mesmo sem mensagens chegando. O `.aasx` em `~/aas/` é
 regravado só a cada 60 s (cartão SD).
 
 - Web UI: `http://169.254.14.189:3000`; API: `http://169.254.14.189:8081/shells`.
