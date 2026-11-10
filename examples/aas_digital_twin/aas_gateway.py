@@ -13,7 +13,7 @@ import json
 import time
 import signal
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
 
@@ -86,29 +86,29 @@ def create_aas():
         id_short="JointBase",
         value_type=model.datatypes.Double,
         value=0.0,
-        description=model.MultiLanguageTextType({"en": "Base joint angle (rad)",
-                                                  "pt": "Angulo do joint base (rad)"})
+        description=model.MultiLanguageTextType({"en": "Base joint angle (deg)",
+                                                  "pt": "Angulo do joint base (graus)"})
     ))
     sm_operational.submodel_element.add(model.Property(
         id_short="JointShoulder",
         value_type=model.datatypes.Double,
         value=0.0,
-        description=model.MultiLanguageTextType({"en": "Shoulder joint angle (rad)",
-                                                  "pt": "Angulo do joint ombro (rad)"})
+        description=model.MultiLanguageTextType({"en": "Shoulder joint angle (deg)",
+                                                  "pt": "Angulo do joint ombro (graus)"})
     ))
     sm_operational.submodel_element.add(model.Property(
         id_short="JointElbow",
         value_type=model.datatypes.Double,
         value=0.0,
-        description=model.MultiLanguageTextType({"en": "Elbow joint angle (rad)",
-                                                  "pt": "Angulo do joint cotovelo (rad)"})
+        description=model.MultiLanguageTextType({"en": "Elbow joint angle (deg)",
+                                                  "pt": "Angulo do joint cotovelo (graus)"})
     ))
     sm_operational.submodel_element.add(model.Property(
         id_short="JointGripper",
         value_type=model.datatypes.Double,
         value=0.0,
-        description=model.MultiLanguageTextType({"en": "Gripper position (rad)",
-                                                  "pt": "Posicao da garra (rad)"})
+        description=model.MultiLanguageTextType({"en": "Gripper servo angle (deg)",
+                                                  "pt": "Angulo do servo da garra (graus)"})
     ))
     
     # Estado da esteira
@@ -120,7 +120,22 @@ def create_aas():
                                                   "pt": "Esteira em movimento"})
     ))
     
+    sm_operational.submodel_element.add(model.Property(
+        id_short="ConveyorSpeed",
+        value_type=model.datatypes.Int,
+        value=0,
+        description=model.MultiLanguageTextType({"en": "Conveyor speed (%)",
+                                                  "pt": "Velocidade da esteira (%)"})
+    ))
+
     # Sensor de peça
+    sm_operational.submodel_element.add(model.Property(
+        id_short="SensorDistance",
+        value_type=model.datatypes.Int,
+        value=None,
+        description=model.MultiLanguageTextType({"en": "HC-SR04 distance (cm), empty = no reading",
+                                                  "pt": "Distancia do HC-SR04 (cm), vazio = sem leitura"})
+    ))
     sm_operational.submodel_element.add(model.Property(
         id_short="PieceDetected",
         value_type=model.datatypes.Boolean,
@@ -138,6 +153,16 @@ def create_aas():
                                                   "pt": "Contagem de ciclos pick-and-place"})
     ))
     
+    # Fase do ciclo automático (auto_fase_t do firmware OT)
+    sm_operational.submodel_element.add(model.Property(
+        id_short="AutoPhase",
+        value_type=model.datatypes.Int,
+        value=0,
+        description=model.MultiLanguageTextType({
+            "en": "Auto cycle phase: 0 stopped, 1 waiting, 2 pick, 3 transport, 4 place, 5 conveyor",
+            "pt": "Fase do automatico: 0 parado, 1 aguarda, 2 pega, 3 transporta, 4 solta, 5 esteira"})
+    ))
+
     # Timestamp da última atualização
     sm_operational.submodel_element.add(model.Property(
         id_short="LastUpdate",
@@ -210,9 +235,12 @@ def update_submodel(sm_operational, sm_protocol, payload, msg_count):
         "JointShoulder": model.datatypes.Double,
         "JointElbow": model.datatypes.Double,
         "JointGripper": model.datatypes.Double,
+        "ConveyorSpeed": model.datatypes.Int,
         "ConveyorRunning": model.datatypes.Boolean,
+        "SensorDistance": model.datatypes.Int,
         "PieceDetected": model.datatypes.Boolean,
         "CycleCount": model.datatypes.Int,
+        "AutoPhase": model.datatypes.Int,
     }
     
     for elem in sm_operational.submodel_element:
@@ -224,7 +252,7 @@ def update_submodel(sm_operational, sm_protocol, payload, msg_count):
             else:
                 elem.value = raw
         elif elem.id_short == "LastUpdate":
-            elem.value = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
+            elem.value = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     
     # Atualiza contador no submodel de protocolo
     for elem in sm_protocol.submodel_element:
@@ -338,10 +366,10 @@ class AASGateway:
             saved = " → .aasx" if (self.msg_count % 5 == 0 or self.msg_count <= 3) else ""
             
             print(f"  [#{self.msg_count:04d}] Seq={seq} Writer={writer_id} "
-                  f"Base={jb:+.3f} Sh={js:+.3f} El={je:+.3f} Gr={jg:+.3f} "
+                  f"Base={jb:5.1f} Sh={js:5.1f} El={je:5.1f} Gr={jg:5.1f} "
                   f"Conv={'ON ' if conv else 'OFF'} "
                   f"Peça={'SIM' if peca else 'NÃO'} "
-                  f"Ciclo={ciclo}{saved}")
+                  f"Ciclo={ciclo} Fase={val(payload.get('AutoPhase', 0))}{saved}")
             
         except json.JSONDecodeError:
             print(f"  [ERRO] JSON inválido: {msg.payload[:100]}")

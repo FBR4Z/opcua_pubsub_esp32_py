@@ -24,7 +24,7 @@ ESP32 OT --Modbus RTU--> ESP32 IT --Wi-Fi--> roteador da célula --Wi-Fi (wlan0)
 | Serviço | Porta | Arquivo |
 |---|---|---|
 | `mosquitto` | 1883 | [mosquitto-celula.conf](mosquitto-celula.conf) → `/etc/mosquitto/conf.d/celula.conf` |
-| `nodered` (+ `@flowfuse/node-red-dashboard`) | 1880 | `~/.node-red/` |
+| `nodered` (+ `@flowfuse/node-red-dashboard`) | 1880 | [nodered-celula.json](nodered-celula.json) (flow); dashboard em `http://<RPi>:1880/dashboard/celula` |
 | `aas-gateway` | — | [aas-gateway.service](aas-gateway.service) → `/etc/systemd/system/`; script em `~/aas/` |
 | `chrony` | 123/udp | [chrony-celula.conf](chrony-celula.conf) → `/etc/chrony/conf.d/celula.conf` |
 | `xrdp` | 3389 | desktop pelo `mstsc` (sessão Xorg); o desktop local não sobe no boot |
@@ -57,6 +57,9 @@ cd ~/.node-red && npm install @flowfuse/node-red-dashboard && sudo systemctl res
 sudo nmcli con modify netplan-eth0 ipv4.method auto ipv4.link-local fallback \
      ipv4.may-fail yes ipv4.never-default yes ipv6.method link-local
 sudo systemctl set-default multi-user.target
+
+# flow da célula (substitui todos os flows do Node-RED)
+curl -X POST http://localhost:1880/flows -H "Content-Type: application/json"      -H "Node-RED-Deployment-Type: full" --data @nodered-celula.json
 ```
 
 ## Hora (NTP)
@@ -77,5 +80,4 @@ PC (w32time, sincronizado com `a.ntp.br`) → RPi (`chrony`, serve `192.168.0.0/
   `chrony-wait.service` nos serviços, ou bateria ML-2020 no conector J5 do RPi 5.
 - Reserva DHCP de `192.168.0.2` para o MAC `88:a2:9e:10:6a:c2` na página do roteador.
 - `config.py` dos ESP32: Wi-Fi `OPC_UA`, `MQTT_BROKER = "192.168.0.2"` e `ntptime`.
-- Flow do Node-RED da célula (assinando `it/opcua/celula_robotica`).
 - Senha no Mosquitto antes de sair da fase de testes.

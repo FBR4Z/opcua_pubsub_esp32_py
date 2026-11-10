@@ -20,7 +20,7 @@ from umqtt.simple import MQTTClient
 
 from lcd_i2c_test import LCD_I2C
 from modbus_rtu_client import ModbusRTUClient
-from opcua_pubsub import OPCUAPublisher
+from opcua_pubsub import OPCUAPublisher, DataValue, StatusCode
 
 try:
     from config import (
@@ -28,6 +28,10 @@ try:
         MQTT_BROKER, MQTT_PORT, MQTT_USER, MQTT_PASSWORD,
         PUBLISHER_ID, DATASET_WRITER_ID, MQTT_TOPIC,
     )
+    try:
+        from config import NTP_HOST
+    except ImportError:
+        NTP_HOST = MQTT_BROKER   # o RPi da célula é broker e servidor de hora
 except ImportError:
     raise RuntimeError(
         "config.py nao encontrado no dispositivo. Copie config_example.py "
@@ -41,6 +45,7 @@ SLAVE_ADDR = 1
 POLL_INTERVAL_MS = 200   # intervalo de polling+publicação (independente do
                           # PUBLISH_INTERVAL em segundos usado noutros exemplos
                           # da lib, que era pensado pra demos mais lentas)
+RECONNECT_MS = 3000
 
 # Offsets — devem bater com HOLD_REG_* em modbus_params.h (lado OT)
 REG_BASE_ANG      = 0
@@ -50,7 +55,12 @@ REG_GARRA_ANG     = 3
 REG_ESTEIRA_VEL   = 4
 REG_ESTEIRA_STATE = 5
 REG_SENSOR_DIST   = 6
-REG_COUNT         = 7
+REG_CYCLE_COUNT   = 7
+REG_AUTO_FASE     = 8
+REG_COUNT         = 9
+
+SENSOR_SEM_LEITURA = 0xFFFF
+PECA_LIMIAR_CM     = 8   # mesmo LIMIAR_PADRAO_CM do auto_cycle.c (OT)
 
 # UART2 — cruzado com o OT (OT TX=17 -> IT RX=16, OT RX=16 <- IT TX=17)
 modbus = ModbusRTUClient(uart_id=2, tx=17, rx=16, baudrate=115200, timeout_ms=200)
@@ -101,26 +111,59 @@ def wifi_connect(ssid, password, timeout_ms=15000):
     return sta
 
 
+def ntp_sync(host):
+    """Acerta o RTC (UTC) pelo chrony do RPi, para o SourceTimestamp sair certo."""
+    try:
+        import ntptime
+        ntptime.host = host
+        ntptime.settime()
+        print("[ntp] hora acertada por", host, time.gmtime())
+        return True
+    except Exception as e:
+        print("[ntp] falhou (", host, "):", e)
+        return False
+
+
 def poll_once():
+    """Lê o OT e monta o DataSet com os campos da Tabela tab:modbus_registers
+    da dissertação (os mesmos que o AAS e o Node-RED consomem)."""
     regs = modbus.read_holding_registers(SLAVE_ADDR, 0, REG_COUNT)
     if regs is None:
         print("[modbus] timeout ou erro na leitura")
         return None
 
+    dist = regs[REG_SENSOR_DIST]
+    if dist == SENSOR_SEM_LEITURA:
+        sensor = DataValue(None, StatusCode.BAD_SENSOR_FAILURE)
+        peca = DataValue(False, StatusCode.UNCERTAIN)
+    else:
+        sensor = dist
+        peca = dist < PECA_LIMIAR_CM
+
     return {
-        "base_ang": regs[REG_BASE_ANG],
-        "ombro_ang": regs[REG_OMBRO_ANG],
-        "cotovelo_ang": regs[REG_COTOVELO_ANG],
-        "garra_ang": regs[REG_GARRA_ANG],
-        "esteira_vel": regs[REG_ESTEIRA_VEL],
-        "esteira_state": regs[REG_ESTEIRA_STATE],
-        "sensor_dist": regs[REG_SENSOR_DIST],
+        "JointBase": float(regs[REG_BASE_ANG]),          # graus
+        "JointShoulder": float(regs[REG_OMBRO_ANG]),
+        "JointElbow": float(regs[REG_COTOVELO_ANG]),
+        "JointGripper": float(regs[REG_GARRA_ANG]),
+        "ConveyorSpeed": regs[REG_ESTEIRA_VEL],          # %
+        "ConveyorRunning": regs[REG_ESTEIRA_STATE] != 0,
+        "SensorDistance": sensor,                        # cm
+        "PieceDetected": peca,
+        "CycleCount": regs[REG_CYCLE_COUNT],
+        "AutoPhase": regs[REG_AUTO_FASE],                # auto_fase_t do OT
     }
 
 
 def main():
     lcd_saudacao()
-    wifi_connect(WIFI_SSID, WIFI_PASSWORD)
+    # O roteador da célula também demora a ligar: insiste no Wi-Fi
+    while True:
+        try:
+            wifi_connect(WIFI_SSID, WIFI_PASSWORD)
+            break
+        except RuntimeError as e:
+            print("[wifi]", e, "- nova tentativa")
+    ntp_ok = ntp_sync(NTP_HOST)
 
     mqtt_client = MQTTClient(
         "esp32-it-modbus-gateway", MQTT_BROKER, port=MQTT_PORT,
@@ -128,14 +171,22 @@ def main():
     )
     publisher = OPCUAPublisher(PUBLISHER_ID, mqtt_client, base_topic=MQTT_TOPIC)
 
-    if not publisher.connect():
-        raise RuntimeError("Falha ao conectar no broker MQTT (" + str(MQTT_BROKER) + ")")
+    # O ESP32 liga bem antes do RPi (broker): tenta até conseguir
+    while not publisher.connect():
+        print("[IT] broker", MQTT_BROKER, "indisponivel, nova tentativa em", RECONNECT_MS, "ms")
+        time.sleep_ms(RECONNECT_MS)
+    if not ntp_ok:
+        ntp_ok = ntp_sync(NTP_HOST)
 
     print("[IT] Loop iniciado. Publisher ID =", PUBLISHER_ID, "Topic =", MQTT_TOPIC)
     while True:
         values = poll_once()
-        if values is not None:
-            publisher.publish(DATASET_WRITER_ID, values)
+        if values is not None and not publisher.publish(DATASET_WRITER_ID, values):
+            # Broker caiu (ex.: RPi reiniciado): reconecta sem parar o polling
+            publisher.disconnect()
+            time.sleep_ms(RECONNECT_MS)
+            if publisher.connect() and not ntp_ok:
+                ntp_ok = ntp_sync(NTP_HOST)
         time.sleep_ms(POLL_INTERVAL_MS)
 
 

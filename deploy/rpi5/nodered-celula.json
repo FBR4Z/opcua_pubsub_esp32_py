@@ -1,0 +1,557 @@
+[
+  {
+    "id": "tab_celula",
+    "type": "tab",
+    "label": "Célula robótica",
+    "disabled": false,
+    "info": "Supervisão da célula: assina it/opcua/celula_robotica (OPC UA PubSub JSON, gateway IT) e mostra no Dashboard 2.\nSó leitura: nenhum comando volta para o TO."
+  },
+  {
+    "id": "cel_broker",
+    "type": "mqtt-broker",
+    "name": "Mosquitto RPi",
+    "broker": "localhost",
+    "port": "1883",
+    "clientid": "nodered-celula",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "60",
+    "cleansession": true,
+    "autoUnsubscribe": true
+  },
+  {
+    "id": "cel_base",
+    "type": "ui-base",
+    "name": "Célula robótica",
+    "path": "/dashboard",
+    "includeClientData": true,
+    "acceptsClientConfig": [
+      "ui-notification",
+      "ui-control"
+    ],
+    "showPathInSidebar": false,
+    "navigationStyle": "default"
+  },
+  {
+    "id": "cel_theme",
+    "type": "ui-theme",
+    "name": "Escuro",
+    "colors": {
+      "surface": "#1e1e1e",
+      "primary": "#00b0ff",
+      "bgPage": "#121212",
+      "groupBg": "#1e1e1e",
+      "groupOutline": "#333333"
+    },
+    "sizes": {
+      "pagePadding": "12px",
+      "groupGap": "12px",
+      "groupBorderRadius": "4px",
+      "widgetGap": "12px"
+    }
+  },
+  {
+    "id": "cel_page",
+    "type": "ui-page",
+    "name": "Célula",
+    "ui": "cel_base",
+    "path": "/celula",
+    "icon": "mdi-robot-industrial",
+    "layout": "grid",
+    "theme": "cel_theme",
+    "order": 1,
+    "visible": "true",
+    "disabled": "false"
+  },
+  {
+    "id": "g_braco",
+    "type": "ui-group",
+    "name": "Braço (graus)",
+    "page": "cel_page",
+    "width": "6",
+    "height": "1",
+    "order": 1,
+    "showTitle": true,
+    "visible": "true",
+    "disabled": "false"
+  },
+  {
+    "id": "g_esteira",
+    "type": "ui-group",
+    "name": "Esteira e peça",
+    "page": "cel_page",
+    "width": "3",
+    "height": "1",
+    "order": 2,
+    "showTitle": true,
+    "visible": "true",
+    "disabled": "false"
+  },
+  {
+    "id": "g_ciclo",
+    "type": "ui-group",
+    "name": "Ciclo automático",
+    "page": "cel_page",
+    "width": "3",
+    "height": "1",
+    "order": 3,
+    "showTitle": true,
+    "visible": "true",
+    "disabled": "false"
+  },
+  {
+    "id": "g_hist",
+    "type": "ui-group",
+    "name": "Histórico das juntas",
+    "page": "cel_page",
+    "width": "12",
+    "height": "1",
+    "order": 4,
+    "showTitle": true,
+    "visible": "true",
+    "disabled": "false"
+  },
+  {
+    "id": "cel_cmt",
+    "type": "comment",
+    "name": "OPC UA PubSub (gateway IT) → dashboard /dashboard/celula",
+    "info": "Campos do DataSet: Tabela tab:modbus_registers da dissertação.\nO aas_gateway assina o mesmo tópico.",
+    "x": 250,
+    "y": 40,
+    "wires": [],
+    "z": "tab_celula"
+  },
+  {
+    "id": "cel_in",
+    "type": "mqtt in",
+    "name": "it/opcua/celula_robotica",
+    "topic": "it/opcua/celula_robotica",
+    "qos": "0",
+    "datatype": "json",
+    "broker": "cel_broker",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 170,
+    "y": 120,
+    "wires": [
+      [
+        "cel_decode"
+      ]
+    ],
+    "z": "tab_celula"
+  },
+  {
+    "id": "cel_decode",
+    "type": "function",
+    "name": "Decodifica NetworkMessage",
+    "func": "// NetworkMessage (Part 14 JSON) -> valores simples\nconst nm = msg.payload;\nif (!nm || nm.MessageType !== 'ua-data' || !nm.Messages || !nm.Messages.length) return null;\nconst ds = nm.Messages[0];\nconst p = ds.Payload || {};\nconst v = k => (p[k] && typeof p[k] === 'object' && 'Value' in p[k]) ? p[k].Value : p[k];\nconst bad = k => p[k] && p[k].StatusCode !== undefined && (p[k].StatusCode & 0x80000000) !== 0;\n\nconst FASES = ['Parado', 'Aguardando peça + botão A', 'Pegando a peça',\n               'Transportando', 'Soltando na esteira', 'Esteira ligada'];\nflow.set('ultima_msg', Date.now());\n\nconst juntas = [['Base', 'JointBase'], ['Ombro', 'JointShoulder'],\n                ['Cotovelo', 'JointElbow'], ['Garra', 'JointGripper']];\nconst fase = v('AutoPhase');\nconst dist = bad('SensorDistance') ? 'sem leitura' : v('SensorDistance') + ' cm';\nconst ts = (p.JointBase && p.JointBase.SourceTimestamp) || '-';\n\nreturn [\n    {payload: v('JointBase')},\n    {payload: v('JointShoulder')},\n    {payload: v('JointElbow')},\n    {payload: v('JointGripper')},\n    juntas.map(([nome, k]) => ({topic: nome, payload: v(k)})),\n    {payload: v('ConveyorRunning') ? '🟢 Ligada (' + v('ConveyorSpeed') + ' %)' : '⚫ Parada'},\n    {payload: dist},\n    {payload: v('PieceDetected') ? '🟢 Sim' : '⚫ Não'},\n    {payload: fase + ' - ' + (FASES[fase] || '?')},\n    {payload: v('CycleCount')},\n    {payload: '🟢 #' + ds.SequenceNumber + '  ' + ts}\n];",
+    "outputs": 11,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 420,
+    "y": 300,
+    "wires": [
+      [
+        "cel_g_base"
+      ],
+      [
+        "cel_g_ombro"
+      ],
+      [
+        "cel_g_cotovelo"
+      ],
+      [
+        "cel_g_garra"
+      ],
+      [
+        "cel_chart"
+      ],
+      [
+        "cel_t_esteira"
+      ],
+      [
+        "cel_t_dist"
+      ],
+      [
+        "cel_t_peca"
+      ],
+      [
+        "cel_t_fase"
+      ],
+      [
+        "cel_t_ciclos"
+      ],
+      [
+        "cel_t_link"
+      ]
+    ],
+    "z": "tab_celula"
+  },
+  {
+    "id": "cel_g_base",
+    "type": "ui-gauge",
+    "group": "g_braco",
+    "name": "Base",
+    "order": 1,
+    "width": "3",
+    "height": "3",
+    "gtype": "gauge-half",
+    "gstyle": "needle",
+    "title": "Base",
+    "units": "°",
+    "icon": "",
+    "prefix": "",
+    "suffix": "",
+    "segments": [
+      {
+        "from": 0,
+        "color": "#2196F3"
+      },
+      {
+        "from": 45,
+        "color": "#4CAF50"
+      },
+      {
+        "from": 135,
+        "color": "#FF9800"
+      }
+    ],
+    "min": 0,
+    "max": 180,
+    "x": 720,
+    "y": 120,
+    "wires": [],
+    "z": "tab_celula"
+  },
+  {
+    "id": "cel_g_ombro",
+    "type": "ui-gauge",
+    "group": "g_braco",
+    "name": "Ombro",
+    "order": 2,
+    "width": "3",
+    "height": "3",
+    "gtype": "gauge-half",
+    "gstyle": "needle",
+    "title": "Ombro",
+    "units": "°",
+    "icon": "",
+    "prefix": "",
+    "suffix": "",
+    "segments": [
+      {
+        "from": 0,
+        "color": "#2196F3"
+      },
+      {
+        "from": 45,
+        "color": "#4CAF50"
+      },
+      {
+        "from": 135,
+        "color": "#FF9800"
+      }
+    ],
+    "min": 0,
+    "max": 180,
+    "x": 720,
+    "y": 160,
+    "wires": [],
+    "z": "tab_celula"
+  },
+  {
+    "id": "cel_g_cotovelo",
+    "type": "ui-gauge",
+    "group": "g_braco",
+    "name": "Cotovelo",
+    "order": 3,
+    "width": "3",
+    "height": "3",
+    "gtype": "gauge-half",
+    "gstyle": "needle",
+    "title": "Cotovelo",
+    "units": "°",
+    "icon": "",
+    "prefix": "",
+    "suffix": "",
+    "segments": [
+      {
+        "from": 0,
+        "color": "#2196F3"
+      },
+      {
+        "from": 45,
+        "color": "#4CAF50"
+      },
+      {
+        "from": 135,
+        "color": "#FF9800"
+      }
+    ],
+    "min": 0,
+    "max": 180,
+    "x": 720,
+    "y": 200,
+    "wires": [],
+    "z": "tab_celula"
+  },
+  {
+    "id": "cel_g_garra",
+    "type": "ui-gauge",
+    "group": "g_braco",
+    "name": "Garra",
+    "order": 4,
+    "width": "3",
+    "height": "3",
+    "gtype": "gauge-half",
+    "gstyle": "needle",
+    "title": "Garra",
+    "units": "°",
+    "icon": "",
+    "prefix": "",
+    "suffix": "",
+    "segments": [
+      {
+        "from": 0,
+        "color": "#2196F3"
+      },
+      {
+        "from": 45,
+        "color": "#4CAF50"
+      },
+      {
+        "from": 135,
+        "color": "#FF9800"
+      }
+    ],
+    "min": 0,
+    "max": 180,
+    "x": 720,
+    "y": 240,
+    "wires": [],
+    "z": "tab_celula"
+  },
+  {
+    "id": "cel_chart",
+    "type": "ui-chart",
+    "group": "g_hist",
+    "name": "Juntas",
+    "label": "Ângulo das juntas (°)",
+    "order": 1,
+    "width": "12",
+    "height": "5",
+    "chartType": "line",
+    "category": "topic",
+    "categoryType": "msg",
+    "xAxisLabel": "",
+    "xAxisProperty": "",
+    "xAxisPropertyType": "msg",
+    "xAxisType": "time",
+    "yAxisLabel": "graus",
+    "ymin": "0",
+    "ymax": "180",
+    "action": "append",
+    "stackSeries": false,
+    "pointShape": "false",
+    "pointRadius": 0,
+    "showLegend": true,
+    "removeOlder": "2",
+    "removeOlderUnit": "60",
+    "removeOlderPoints": "",
+    "colors": [
+      "#00b0ff",
+      "#4CAF50",
+      "#FF9800",
+      "#e040fb"
+    ],
+    "textColor": [
+      "#e0e0e0"
+    ],
+    "gridColor": [
+      "#333333"
+    ],
+    "x": 710,
+    "y": 280,
+    "wires": [
+      []
+    ],
+    "z": "tab_celula"
+  },
+  {
+    "id": "cel_t_esteira",
+    "type": "ui-text",
+    "group": "g_esteira",
+    "name": "Esteira",
+    "order": 1,
+    "width": "0",
+    "height": "0",
+    "label": "Esteira",
+    "format": "{{msg.payload}}",
+    "layout": "row-spread",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#e0e0e0",
+    "wrapText": false,
+    "className": "",
+    "x": 730,
+    "y": 320,
+    "wires": [],
+    "z": "tab_celula"
+  },
+  {
+    "id": "cel_t_dist",
+    "type": "ui-text",
+    "group": "g_esteira",
+    "name": "Sensor",
+    "order": 2,
+    "width": "0",
+    "height": "0",
+    "label": "Sensor",
+    "format": "{{msg.payload}}",
+    "layout": "row-spread",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#e0e0e0",
+    "wrapText": false,
+    "className": "",
+    "x": 730,
+    "y": 360,
+    "wires": [],
+    "z": "tab_celula"
+  },
+  {
+    "id": "cel_t_peca",
+    "type": "ui-text",
+    "group": "g_esteira",
+    "name": "Peça",
+    "order": 3,
+    "width": "0",
+    "height": "0",
+    "label": "Peça",
+    "format": "{{msg.payload}}",
+    "layout": "row-spread",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#e0e0e0",
+    "wrapText": false,
+    "className": "",
+    "x": 730,
+    "y": 400,
+    "wires": [],
+    "z": "tab_celula"
+  },
+  {
+    "id": "cel_t_fase",
+    "type": "ui-text",
+    "group": "g_ciclo",
+    "name": "Fase",
+    "order": 1,
+    "width": "0",
+    "height": "0",
+    "label": "Fase",
+    "format": "{{msg.payload}}",
+    "layout": "row-spread",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#e0e0e0",
+    "wrapText": false,
+    "className": "",
+    "x": 730,
+    "y": 440,
+    "wires": [],
+    "z": "tab_celula"
+  },
+  {
+    "id": "cel_t_ciclos",
+    "type": "ui-text",
+    "group": "g_ciclo",
+    "name": "Ciclos",
+    "order": 2,
+    "width": "0",
+    "height": "0",
+    "label": "Ciclos",
+    "format": "{{msg.payload}}",
+    "layout": "row-spread",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#e0e0e0",
+    "wrapText": false,
+    "className": "",
+    "x": 730,
+    "y": 480,
+    "wires": [],
+    "z": "tab_celula"
+  },
+  {
+    "id": "cel_t_link",
+    "type": "ui-text",
+    "group": "g_ciclo",
+    "name": "Gateway IT",
+    "order": 3,
+    "width": "0",
+    "height": "0",
+    "label": "Gateway IT",
+    "format": "{{msg.payload}}",
+    "layout": "row-spread",
+    "style": false,
+    "font": "",
+    "fontSize": 16,
+    "color": "#e0e0e0",
+    "wrapText": false,
+    "className": "",
+    "x": 730,
+    "y": 520,
+    "wires": [],
+    "z": "tab_celula"
+  },
+  {
+    "id": "cel_tick",
+    "type": "inject",
+    "name": "a cada 1 s",
+    "props": [],
+    "repeat": "1",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "2",
+    "topic": "",
+    "x": 150,
+    "y": 600,
+    "wires": [
+      [
+        "cel_watch"
+      ]
+    ],
+    "z": "tab_celula"
+  },
+  {
+    "id": "cel_watch",
+    "type": "function",
+    "name": "Vigia do gateway",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "func": "const t = flow.get('ultima_msg') || 0;\nconst s = (Date.now() - t) / 1000;\nif (s <= 3) return null;\nmsg.payload = t ? '🔴 sem dados há ' + Math.round(s) + ' s' : '🔴 aguardando o gateway IT';\nreturn msg;",
+    "x": 360,
+    "y": 600,
+    "wires": [
+      [
+        "cel_t_link"
+      ]
+    ],
+    "z": "tab_celula"
+  }
+]
