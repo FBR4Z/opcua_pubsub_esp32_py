@@ -14,7 +14,8 @@ ESP32 OT --Modbus RTU--> ESP32 IT --Wi-Fi--> roteador da célula --Wi-Fi (wlan0)
 | `eth0` | cabo direto ao PC | **`169.254.14.189/16`** fixo, sem rota padrão |
 | PC, placa `Ethernet` | cabo direto ao RPi | **`169.254.124.59/16`** fixo ([../pc/fixar-ip-cabo.ps1](../pc/fixar-ip-cabo.ps1)) |
 
-- MAC do `wlan0`: `88:a2:9e:10:6a:c2` (reservar `192.168.0.2` no DHCP do roteador).
+- MAC do `wlan0`: `88:a2:9e:10:6a:c2`. O DHCP do roteador entrega só `.100`–`.254`
+  (Redes → LAN/DHCP), então o `.2` fixo não colide com os ESP32.
 - A rede de casa (`netplan-wlan0-FABIO`) ficou salva com `autoconnect no`; para baixar pacotes:
   `sudo nmcli con up netplan-wlan0-FABIO` e depois `sudo nmcli con up OPC_UA`.
 - No PC, `ssh rpi5` aponta para `169.254.14.189` (o `AAS.local` pode resolver pelo Wi-Fi e cair
@@ -29,7 +30,7 @@ ESP32 OT --Modbus RTU--> ESP32 IT --Wi-Fi--> roteador da célula --Wi-Fi (wlan0)
 | `aas-gateway` | — | [aas-gateway.service](aas-gateway.service) → `/etc/systemd/system/`; script em `~/aas/` |
 | BaSyx (Docker): `aas-env`, `aas-registry`, `sm-registry`, `aas-web-ui` | 8081, 8082, 8083, 3000 | [basyx/](basyx/) → `~/basyx/`; Web UI em `http://169.254.14.189:3000` |
 | `chrony` | 123/udp | [chrony-celula.conf](chrony-celula.conf) → `/etc/chrony/conf.d/celula.conf` |
-| `xrdp` | 3389 | desktop pelo `mstsc` (sessão Xorg); o desktop local não sobe no boot |
+| `xrdp` | 3389 | desktop pelo `mstsc` (sessão Xorg); o desktop local não sobe no boot. Sair pelo menu (Logout): reconectar numa sessão deixada aberta chegou a congelar a tela. Chromium sem GPU: `/etc/chromium.d/zz-xrdp-sem-gpu` |
 
 ## Instalação (refazer do zero)
 
@@ -105,6 +106,5 @@ regravado só a cada 60 s (cartão SD).
   corrige ~20 s depois (teste de 2026-11-09: salto de 3035 s). `aas-gateway` e `nodered` sobem antes,
   então as primeiras mensagens podem sair com hora errada. Opções: `After=time-sync.target` +
   `chrony-wait.service` nos serviços, ou bateria ML-2020 no conector J5 do RPi 5.
-- Reserva DHCP de `192.168.0.2` para o MAC `88:a2:9e:10:6a:c2` na página do roteador.
 - `config.py` dos ESP32: Wi-Fi `OPC_UA`, `MQTT_BROKER = "192.168.0.2"` e `ntptime`.
 - Senha no Mosquitto antes de sair da fase de testes.

@@ -25,12 +25,17 @@ Estado em 2026-11-09: **funcionando de ponta a ponta com dados reais**.
 
 | Equipamento | Rede | Endereço |
 |---|---|---|
-| Roteador da célula | SSID `OPC_UA` (sem internet), DHCP | `192.168.0.1` |
+| Roteador da célula (Claro/NET, página "Gateways") | SSID `OPC_UA` (sem internet); DHCP só de `.100` a `.254` | `192.168.0.1` |
 | RPi 5 `AAS`, `wlan0` | `OPC_UA` | **`192.168.0.2`** (fixo): broker MQTT e NTP dos ESP32 |
 | RPi 5 `AAS`, `eth0` | cabo direto ao PC | **`169.254.14.189`** (fixo) |
 | PC, placa `Ethernet` | cabo direto ao RPi | **`169.254.124.59`** (fixo) |
-| ESP32 IT | `OPC_UA` | DHCP (`192.168.0.3` em 2026-11-09) |
+| ESP32 IT | `OPC_UA` | DHCP (`192.168.0.100` em 2026-11-09) |
 | ESP32 OT | — | sem rede; Modbus RTU escravo 1, 115200 8N1 |
+
+De `.2` a `.99` ficam livres para IPs fixos: o DHCP do roteador foi limitado a `.100`–`.254`
+(Redes → LAN/DHCP: início `.100`, 155 CPEs, lease 86400 s). Antes ele começava em `.2` e, no boot
+a frio, entregou o `.2` (IP fixo do RPi) para o ESP32 IT, que passou a procurar o broker nele
+mesmo ("sem broker").
 
 Atenção: a rede de casa também usa `192.168.0.x`. Um ESP32 que fique na rede errada encontra
 "outro" `192.168.0.2` (ver [gateway IT](../examples/modbus_gateway/README.md)).
@@ -45,7 +50,8 @@ Atenção: a rede de casa também usa `192.168.0.x`. Um ESP32 que fique na rede 
 | API do AAS (Part 2) | http://169.254.14.189:8081/shells, `/submodels` | pull (REST) |
 | Arquivo AAS | `~/aas/celula_robotica.aasx` no RPi (a cada 60 s), abre no AASX Package Explorer | foto |
 | Prosys OPC UA Browser | PubSub, ver abaixo | push (MQTT) |
-| Área de trabalho do RPi | `mstsc` → `169.254.14.189`, usuário `engfb` | — |
+| Área de trabalho do RPi | `mstsc` → `169.254.14.189`, usuário `engfb` (sair pelo menu Logout) | — |
+| Página do roteador | Chromium **no RPi** (mstsc) → `http://192.168.0.1` (recusa acesso por túnel) | — |
 | Terminal do RPi | `ssh rpi5` (aponta para `169.254.14.189`) | — |
 
 **Push × pull.** Node-RED e Prosys *assinam* o tópico MQTT e recebem cada mensagem na hora. A AAS
@@ -152,6 +158,8 @@ RPi. Detalhes em [deploy/rpi5/README.md](../deploy/rpi5/README.md#hora-ntp).
 | ESP32 IT → Wi-Fi `OPC_UA` → NTP → broker | ok |
 | AAS (arquivo e BaSyx) e Node-RED com dados reais | ok |
 | Ciclo automático pelos botões da IHM | ok: `CycleCount` subiu para 6 no AAS |
+| Boot a frio de tudo junto (1ª vez) | serviços, BaSyx, dashboard e hora ok; **falhou** a rede: o RPi ficou esperando IPv6 sem aplicar o IPv4, o roteador deu o `.2` ao ESP32 IT e o AAS não foi reenviado ao BaSyx. Corrigido (IPv6 link-local, DHCP a partir de `.100`, reenvio do AAS a cada 1 s) |
+| Reset da placa IT com o DHCP novo (2x) | voltou a publicar em ~5 s, sempre como `192.168.0.100` |
 | Prosys OPC UA Browser assinando o PubSub JSON | ok |
 | RPi saiu e voltou para a `OPC_UA` com o ESP32 publicando | voltou sozinho, mas só depois de ~5 min (antes da correção abaixo) |
 | Tráfego com o ESP32 bloqueado 25 s no RPi (`iptables DROP`), com o vigia de ping | voltou **2 s** depois de liberar |
@@ -161,9 +169,8 @@ RPi. Detalhes em [deploy/rpi5/README.md](../deploy/rpi5/README.md#hora-ntp).
 
 - Gateway IT: enquanto o broker está inalcançável, cada tentativa de `connect()` (sem prazo no
   `umqtt`) pode segurar o laço; Modbus e displays param até ela terminar.
-- Boot a frio de tudo junto (roteador, RPi, OT e IT).
+- Repetir o boot a frio de tudo junto, agora com as correções da 1ª tentativa.
 - Hora no boot do RPi: `After=time-sync.target` + `chrony-wait` nos serviços, ou bateria ML-2020 no RTC.
-- Reserva DHCP de `192.168.0.2` para o MAC `88:a2:9e:10:6a:c2` no roteador.
 - Senha no Mosquitto antes de sair da fase de testes.
 - Simulador `examples/aas_digital_twin/main.py` ainda publica as juntas em rad (a célula real e o AAS usam graus).
 - Dissertação: texto do simulador ("em rad"), figura das fases do ciclo, AAS como servidor BaSyx
