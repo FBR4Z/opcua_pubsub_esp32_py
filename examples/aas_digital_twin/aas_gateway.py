@@ -16,6 +16,7 @@ import urllib.error
 import urllib.request
 import signal
 import sys
+import threading
 from datetime import datetime, timezone
 
 import paho.mqtt.client as mqtt
@@ -332,6 +333,7 @@ class AASGateway:
         self.t_basyx = 0.0
         self.t_aasx = time.monotonic()
         self.basyx_ok = False   # False = (re)enviar o AAS inteiro na próxima vez
+        self.basyx_lock = threading.Lock()   # thread do MQTT x laço principal
         
         print("\n" + "=" * 60)
         print("  AAS GATEWAY — OPC UA PubSub → Asset Administration Shell")
@@ -356,6 +358,10 @@ class AASGateway:
         depois só os submodelos que mudam."""
         if not BASYX_URL:
             return
+        with self.basyx_lock:
+            self._sync_basyx()
+
+    def _sync_basyx(self):
         try:
             if self.basyx_ok:
                 objs = [self.sm_operational, self.sm_protocol]
@@ -468,7 +474,13 @@ class AASGateway:
             print(f"  No PowerShell: netstat -an | findstr 1883")
             sys.exit(1)
         
-        client.loop_forever()
+        # MQTT em outra thread; aqui, se o BaSyx ainda não recebeu o AAS (subiu depois
+        # do gateway, ou reiniciou), tenta de novo mesmo sem mensagens chegando
+        client.loop_start()
+        while True:
+            time.sleep(BASYX_INTERVAL_S)
+            if not self.basyx_ok:
+                self.sync_basyx()
 
 
 # =============================================================================
