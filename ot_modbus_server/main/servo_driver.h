@@ -16,10 +16,10 @@ typedef enum {
 
 // Ângulo máximo da garra. Acima do ponto em que as pinças se encostam o servo
 // fica forçando parado (corrente de travamento) e queima: foi o que aconteceu
-// em 2026-11 com a "fechada" em 180. Medido pelo usuário: as pinças fecham em
-// ~179; a "fechada" do automático é 165 e o limite fica em 170, com folga.
+// em 2026-11 com a "fechada" em 180. Medido pelo usuário: as pinças encostam
+// em 170; a "fechada" do automático é 165 e o limite fica abaixo do contato.
 // Servo novo: conferir com `ir` de 5 em 5 graus e ajustar se o ponto mudar.
-#define SERVO_GARRA_ANG_MAX 170
+#define SERVO_GARRA_ANG_MAX 167
 
 // Inicializa o timer LEDC (50Hz) e os 4 canais PWM. Chamar uma vez no boot.
 void servo_driver_init(void);

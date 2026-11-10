@@ -86,7 +86,7 @@ Os campos seguem a Tabela `tab:modbus_registers` da dissertação.
 | 0 `BASE_ANG` | `JointBase` | Double | graus (0–180) |
 | 1 `OMBRO_ANG` | `JointShoulder` | Double | graus |
 | 2 `COTOVELO_ANG` | `JointElbow` | Double | graus |
-| 3 `GARRA_ANG` | `JointGripper` | Double | graus (aberta 90, fechada 165; limite 170 no driver) |
+| 3 `GARRA_ANG` | `JointGripper` | Double | graus (aberta 90, fechada 165; pinças encostam em 170; limite 167 no driver) |
 | 4 `ESTEIRA_VEL` | `ConveyorSpeed` | Int | % (0–100) |
 | 5 `ESTEIRA_STATE` | `ConveyorRunning` | Boolean | |
 | 6 `SENSOR_DIST` | `SensorDistance` | Int | cm; `0xFFFF` → `Value: null`, `StatusCode` BadSensorFailure |
@@ -168,9 +168,9 @@ RPi. Detalhes em [deploy/rpi5/README.md](../deploy/rpi5/README.md#hora-ntp).
 ## Pendências
 
 - **Servo da garra queimado (2026-11-09):** faz barulho mas não gira; trocar. Causa: a "fechada"
-  era 180, mas as pinças já fecham em ~179, então o servo ficava forçando parado. Firmware corrigido
-  (fechada 165, limite 170 em `servo_driver`, valendo para console, IHM e automático); **falta
-  gravar no OT**. Com o servo novo, conferir com `ir` onde as pinças encostam antes do automático.
+  era 180, mas as pinças já encostam em 170, então o servo ficava forçando parado. Firmware
+  corrigido e gravado no OT em 2026-11-09 (fechada 165, limite 167 em `servo_driver`, valendo para
+  console, IHM e automático). Com o servo novo, conferir com `ir` onde as pinças encostam.
 - Gateway IT: enquanto o broker está inalcançável, cada tentativa de `connect()` (sem prazo no
   `umqtt`) pode segurar o laço; Modbus e displays param até ela terminar.
 - Repetir o boot a frio de tudo junto, agora com as correções da 1ª tentativa.
