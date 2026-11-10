@@ -1,7 +1,8 @@
 # RPi 5 da célula (Mosquitto + Node-RED + AAS)
 
 Raspberry Pi 5 8 GB, hostname `AAS`, Raspberry Pi OS (Debian 13 trixie, 64-bit), configurado
-só por SSH (sem tela).
+só por SSH (sem tela) ou `mstsc` (xrdp) em `169.254.14.189`.
+Visão geral da célula (endereços, DataSet, testes): [docs/CELULA_ROBOTICA.md](../../docs/CELULA_ROBOTICA.md).
 
 ```
 ESP32 OT --Modbus RTU--> ESP32 IT --Wi-Fi--> roteador da célula --Wi-Fi (wlan0)--> RPi 5 --cabo (eth0)--> PC
@@ -85,6 +86,10 @@ memória: se ele reiniciar, o gateway reenvia o AAS inteiro sozinho. O `.aasx` e
 regravado só a cada 60 s (cartão SD).
 
 - Web UI: `http://169.254.14.189:3000`; API: `http://169.254.14.189:8081/shells`.
+- A Web UI consulta a API (pull) e não atualiza sozinha: recarregue a página ou ligue o
+  "Auto Sync" nas configurações dela. Node-RED e Prosys atualizam sozinhos porque assinam o MQTT.
+- Os endereços da Web UI e o `basyx.externalurl` usam o IP do cabo (`169.254.14.189`): são os que
+  o navegador do PC enxerga.
 - Valores ao vivo: `GET /submodels/<id em base64url>/$value`.
 
 ## Pendente

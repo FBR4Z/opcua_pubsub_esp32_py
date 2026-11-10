@@ -16,10 +16,16 @@ Demonstração prática da biblioteca OPC UA PubSub alimentando um Asset Adminis
 │    place              │           │ Exporta: .aasx + .json   │
 └───────────────────────┘           └──────────────────────────┘
                                               │
-                                              ▼
-                                    AASX Package Explorer
-                                    (visualização AAS V3)
+                              ┌───────────────┴───────────────┐
+                              ▼                               ▼
+                 Eclipse BaSyx (API AAS Part 2)     AASX Package Explorer
+                 + AAS Web UI (ao vivo)             (arquivo .aasx)
 ```
+
+Na célula real, quem publica é o gateway IT ([examples/modbus_gateway](../modbus_gateway/README.md))
+com os dados do controlador OT, e o `aas_gateway.py` roda como serviço no RPi 5 da célula
+([deploy/rpi5](../../deploy/rpi5/README.md)). O `main.py` desta pasta é um **simulador** da célula,
+útil para testar sem o hardware. Visão geral: [docs/CELULA_ROBOTICA.md](../../docs/CELULA_ROBOTICA.md).
 
 ## Arquitetura
 
@@ -27,7 +33,9 @@ O exemplo demonstra a **camada IT** de uma arquitetura industrial com separaçã
 
 - **ESP32 IT** publica dados operacionais como mensagens OPC UA PubSub JSON (IEC 62541-14 §7.2.3) sobre MQTT
 - **AAS Gateway** subscribe no tópico MQTT, parseia as NetworkMessages OPC UA PubSub, e popula um AAS usando o Eclipse BaSyx Python SDK
-- O AAS é exportado como `.aasx` (padrão IDTA) e `.json`, visualizável no AASX Package Explorer
+- O AAS é publicado no **Eclipse BaSyx** pela API REST da AAS Part 2 (shell e submodelos na partida,
+  `OperationalData` e `OPCUAPubSubInfo` 1x por segundo) e visto ao vivo na AAS Web UI
+- O AAS também é exportado como `.aasx` (padrão IDTA) e `.json` a cada 60 s, para o AASX Package Explorer
 
 A biblioteca OPC UA PubSub (`opcua_pubsub.py`) é a camada central de interoperabilidade — padroniza os dados do chão de fábrica no formato IEC 62541-14, permitindo que qualquer consumidor compatível (AAS, SCADA, dashboard) interprete os dados sem conhecimento prévio da fonte.
 
@@ -36,7 +44,7 @@ A biblioteca OPC UA PubSub (`opcua_pubsub.py`) é a camada central de interopera
 | Submodel | Conteúdo |
 |----------|----------|
 | **Nameplate** | Fabricante, tipo do ativo, protocolo de comunicação, método de separação OT/IT |
-| **OperationalData** | JointBase, JointShoulder, JointElbow, JointGripper (rad), ConveyorRunning, PieceDetected (bool), CycleCount, LastUpdate |
+| **OperationalData** | JointBase, JointShoulder, JointElbow, JointGripper (graus), ConveyorSpeed (%), ConveyorRunning, SensorDistance (cm), PieceDetected, CycleCount, AutoPhase, LastUpdate (UTC) |
 | **OPCUAPubSubInfo** | PublisherId, tópico MQTT, encoding, MessageType, DataSetWriterId, MessagesReceived |
 
 ## Requisitos
@@ -51,16 +59,20 @@ A biblioteca OPC UA PubSub (`opcua_pubsub.py`) é a camada central de interopera
 | Arquivo | Origem | Descrição |
 |---------|--------|-----------|
 | `opcua_pubsub.py` | `src/opcua_pubsub.py` | Biblioteca OPC UA PubSub |
-| `main.py` | Esta pasta | Simulador da célula + publisher |
+| `main.py` | Esta pasta | Simulador da célula + publisher (juntas ainda em rad; a célula real usa graus) |
 | `config.py` | Copiar de `config_example.py` | Credenciais WiFi/MQTT |
 
-### Software (PC)
+### Software (RPi 5 da célula, ou PC)
 | Pacote | Versão | Propósito |
 |--------|--------|-----------|
-| basyx-python-sdk | ≥2.0.0 | Metamodelo AAS + exportação AASX |
+| basyx-python-sdk | ≥2.0.0 (2.2.0 no RPi) | Metamodelo AAS + exportação AASX |
 | paho-mqtt | ≥2.0.0 | Subscrição MQTT |
-| AASX Package Explorer | V3.x | Visualização do AAS (opcional) |
 | Mosquitto | 2.x | Broker MQTT |
+| Eclipse BaSyx (Docker) | AAS Environment 2.0.0-milestone-16 | Servidor AAS (opcional; `BASYX_URL = ""` desliga) |
+| AASX Package Explorer | V3.x | Visualização do arquivo AAS (opcional) |
+
+Configuração no topo do `aas_gateway.py`: `MQTT_BROKER`, `MQTT_TOPIC`, `BASYX_URL`
+(`http://127.0.0.1:8081`), `BASYX_INTERVAL_S` (1 s) e `AASX_INTERVAL_S` (60 s).
 
 ## Instalação e Uso
 
@@ -98,7 +110,14 @@ O ESP32 começará a publicar dados simulados da célula robótica.
 
 ### 6. Visualizar o AAS
 
-Baixe o [AASX Package Explorer](https://github.com/eclipse-aaspe/package-explorer/releases) e abra `celula_robotica.aasx`.
+- **Ao vivo:** AAS Web UI do BaSyx (na célula, `http://169.254.14.189:3000`). A Web UI consulta a
+  API REST (pull): recarregue a página ou ligue o "Auto Sync" nas configurações dela.
+- **API:** `GET http://<servidor>:8081/submodels/<id em base64url>/$value`.
+- **Arquivo:** [AASX Package Explorer](https://github.com/eclipse-aaspe/package-explorer/releases) →
+  abrir `celula_robotica.aasx` (foto do momento; regravado a cada 60 s).
+
+Na célula, o `aas_gateway.py` roda como serviço systemd (`aas-gateway`) e o BaSyx via
+`docker compose`: ver [deploy/rpi5/README.md](../../deploy/rpi5/README.md).
 
 ## Mapeamento de Tipos de Dados
 
@@ -108,7 +127,7 @@ O gateway realiza a conversão entre tipos OPC UA (Part 6) e tipos AAS/XSD:
 |-------------|----------------|--------|
 | Float | xs:double | JointBase, JointShoulder, JointElbow, JointGripper |
 | Boolean | xs:boolean | ConveyorRunning, PieceDetected |
-| Integer | xs:integer | CycleCount |
+| Integer | xs:int | ConveyorSpeed, SensorDistance, CycleCount, AutoPhase |
 | String | xs:string | LastUpdate |
 
 ## Contexto Acadêmico

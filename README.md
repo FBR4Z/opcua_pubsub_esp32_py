@@ -214,22 +214,32 @@ opcua_pubsub_esp32_py/
 │       ├── .gitignore              # Ignores config.py with credentials
 │       ├── README.md               # Example documentation (EN)
 │       └── README_PT.md            # Example documentation (PT)
+│   ├── modbus_gateway/             # Robotic cell IT gateway: Modbus RTU (OT) -> OPC UA PubSub JSON
+│   └── aas_digital_twin/           # aas_gateway.py: OPC UA PubSub -> AAS (BaSyx) + simulator
 │
 ├── ot_modbus_server/               # OT firmware (ESP-IDF, C): robot arm, conveyor, HC-SR04, LCD,
 │                                   #   Modbus RTU server polled by examples/modbus_gateway
+│
+├── deploy/
+│   ├── rpi5/                       # Cell Raspberry Pi 5: Mosquitto, Node-RED, BaSyx, chrony, network
+│   └── pc/                         # PC: Windows NTP server, fixed cable IP
 │
 ├── benchmarks/                     # Performance comparison suite
 │   ├── benchmark_leve.py           # JSON vs UADP benchmark (runs on ESP32)
 │   └── echo_server.py             # PC-side echo server for latency RTT measurement
 │
 └── docs/
-    └── BENCHMARK_REPORT.md         # Full benchmark results and methodology
+    ├── BENCHMARK_REPORT.md         # Full benchmark results and methodology
+    └── CELULA_ROBOTICA.md          # Full robotic cell: architecture, addresses, DataSet, tests (PT)
 ```
 
 ---
 
 ## Documentation
 
+- **[docs/CELULA_ROBOTICA.md](docs/CELULA_ROBOTICA.md)** — The complete robotic cell (OT → IT → MQTT → AAS/Node-RED/Prosys): architecture, addresses, DataSet, how to view the data, tests (in Portuguese).
+- **[examples/modbus_gateway/README.md](examples/modbus_gateway/README.md)** — Robotic cell IT gateway (Modbus RTU → OPC UA PubSub, in Portuguese).
+- **[deploy/rpi5/README.md](deploy/rpi5/README.md)** — Setup of the cell's Raspberry Pi 5 (broker, Node-RED, BaSyx, NTP, network; in Portuguese).
 - **[docs/BENCHMARK_REPORT.md](docs/BENCHMARK_REPORT.md)** — Complete benchmark: message size, throughput, latency, memory. Includes OpcCmd validation proof and reproduction instructions.
 - **[examples/lcd_display/README.md](examples/lcd_display/README.md)** — LCD example wiring, setup, and usage guide.
 - **[examples/node-red/README.md](examples/node-red/README.md)** — Minimal bidirectional Node-RED example (button + LED).

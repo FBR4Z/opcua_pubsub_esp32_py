@@ -16,10 +16,16 @@ A practical demonstration of the OPC UA PubSub library feeding an Asset Administ
 │    cycle              │           │ Exports: .aasx + .json   │
 └───────────────────────┘           └──────────────────────────┘
                                               │
-                                              ▼
-                                    AASX Package Explorer
-                                    (AAS V3 visualization)
+                              ┌───────────────┴───────────────┐
+                              ▼                               ▼
+                 Eclipse BaSyx (AAS Part 2 API)     AASX Package Explorer
+                 + AAS Web UI (live)                (.aasx file)
 ```
+
+In the real cell, the publisher is the IT gateway ([examples/modbus_gateway](../modbus_gateway/README.md))
+with data from the OT controller, and `aas_gateway.py` runs as a service on the cell's Raspberry Pi 5
+([deploy/rpi5](../../deploy/rpi5/README.md), in Portuguese). This folder's `main.py` is a cell
+**simulator** for testing without hardware. Overview: [docs/CELULA_ROBOTICA.md](../../docs/CELULA_ROBOTICA.md) (Portuguese).
 
 ## Architecture
 
@@ -27,7 +33,10 @@ The example demonstrates the **IT layer** of an OT/IT separated industrial archi
 
 - **ESP32 IT** publishes operational data as OPC UA PubSub JSON messages (IEC 62541-14 §7.2.3) over MQTT
 - **AAS Gateway** subscribes to the MQTT topic, parses the OPC UA PubSub NetworkMessages, and populates an AAS using the Eclipse BaSyx Python SDK
-- The AAS is exported as `.aasx` (IDTA standard) and `.json`, viewable in the AASX Package Explorer
+- The AAS is pushed to **Eclipse BaSyx** through the AAS Part 2 REST API (shell and submodels at start-up,
+  `OperationalData` and `OPCUAPubSubInfo` once per second) and viewed live in the AAS Web UI
+  (`BASYX_URL = ""` disables it)
+- The AAS is also exported as `.aasx` (IDTA standard) and `.json` every 60 s, viewable in the AASX Package Explorer
 
 The OPC UA PubSub library (`opcua_pubsub.py`) is the central interoperability layer — it standardizes shop floor data into IEC 62541-14 format, enabling any compliant consumer (AAS, SCADA, dashboard) to interpret the data without prior knowledge of the source.
 
@@ -36,7 +45,7 @@ The OPC UA PubSub library (`opcua_pubsub.py`) is the central interoperability la
 | Submodel | Contents |
 |----------|----------|
 | **Nameplate** | Manufacturer, asset type, communication protocol, OT/IT separation method |
-| **OperationalData** | JointBase, JointShoulder, JointElbow, JointGripper (rad), ConveyorRunning, PieceDetected (bool), CycleCount, LastUpdate |
+| **OperationalData** | JointBase, JointShoulder, JointElbow, JointGripper (degrees), ConveyorSpeed (%), ConveyorRunning, SensorDistance (cm), PieceDetected, CycleCount, AutoPhase, LastUpdate (UTC) |
 | **OPCUAPubSubInfo** | PublisherId, MQTT topic, encoding, MessageType, DataSetWriterId, MessagesReceived |
 
 ## Requirements
@@ -61,6 +70,7 @@ The OPC UA PubSub library (`opcua_pubsub.py`) is the central interoperability la
 | paho-mqtt | ≥2.0.0 | MQTT subscription |
 | AASX Package Explorer | V3.x | AAS visualization (optional) |
 | Mosquitto | 2.x | MQTT broker |
+| Eclipse BaSyx (Docker) | AAS Environment 2.0.0-milestone-16 | AAS server (optional) |
 
 ## Setup
 
@@ -104,7 +114,12 @@ The ESP32 will start publishing simulated robotic cell data.
 
 ### 6. View AAS
 
-Download [AASX Package Explorer](https://github.com/eclipse-aaspe/package-explorer/releases) and open `celula_robotica.aasx`.
+- **Live:** BaSyx AAS Web UI (`http://<server>:3000`). The Web UI polls the REST API: reload the
+  page or enable "Auto Sync" in its settings.
+- **File:** download [AASX Package Explorer](https://github.com/eclipse-aaspe/package-explorer/releases)
+  and open `celula_robotica.aasx` (snapshot, rewritten every 60 s).
+
+Note: the simulator still publishes joint angles in radians; the real cell and the AAS use degrees.
 
 ## OPC UA PubSub Message Example
 
@@ -139,7 +154,7 @@ The AAS Gateway performs the conversion between OPC UA types (Part 6) and AAS/XS
 |-------------|----------------|--------|
 | Float | xs:double | JointBase, JointShoulder, JointElbow, JointGripper |
 | Boolean | xs:boolean | ConveyorRunning, PieceDetected |
-| Integer | xs:integer | CycleCount |
+| Integer | xs:int | ConveyorSpeed, SensorDistance, CycleCount, AutoPhase |
 | String | xs:string | LastUpdate |
 
 ## Research Context
