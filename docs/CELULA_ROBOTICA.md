@@ -167,6 +167,8 @@ RPi. Detalhes em [deploy/rpi5/README.md](../deploy/rpi5/README.md#hora-ntp).
 
 ## Pendências
 
+- **Servo da garra quebrado (2026-11-09):** faz barulho mas não gira; trocar. Depois da troca,
+  conferir as posições aberta (90) e fechada (180) no console `ot>` do OT antes de rodar o automático.
 - Gateway IT: enquanto o broker está inalcançável, cada tentativa de `connect()` (sem prazo no
   `umqtt`) pode segurar o laço; Modbus e displays param até ela terminar.
 - Repetir o boot a frio de tudo junto, agora com as correções da 1ª tentativa.
