@@ -26,6 +26,7 @@ ESP32 OT --Modbus RTU--> ESP32 IT --Wi-Fi--> roteador da célula --Wi-Fi (wlan0)
 | `mosquitto` | 1883 | [mosquitto-celula.conf](mosquitto-celula.conf) → `/etc/mosquitto/conf.d/celula.conf` |
 | `nodered` (+ `@flowfuse/node-red-dashboard`) | 1880 | [nodered-celula.json](nodered-celula.json) (flow); dashboard em `http://<RPi>:1880/dashboard/celula` |
 | `aas-gateway` | — | [aas-gateway.service](aas-gateway.service) → `/etc/systemd/system/`; script em `~/aas/` |
+| BaSyx (Docker): `aas-env`, `aas-registry`, `sm-registry`, `aas-web-ui` | 8081, 8082, 8083, 3000 | [basyx/](basyx/) → `~/basyx/`; Web UI em `http://169.254.14.189:3000` |
 | `chrony` | 123/udp | [chrony-celula.conf](chrony-celula.conf) → `/etc/chrony/conf.d/celula.conf` |
 | `xrdp` | 3389 | desktop pelo `mstsc` (sessão Xorg); o desktop local não sobe no boot |
 
@@ -58,6 +59,10 @@ sudo nmcli con modify netplan-eth0 ipv4.method auto ipv4.link-local fallback \
      ipv4.may-fail yes ipv4.never-default yes ipv6.method link-local
 sudo systemctl set-default multi-user.target
 
+# servidor AAS (Eclipse BaSyx, ~1,9 GB de imagens; precisa de internet)
+sudo apt-get install -y docker.io docker-compose && sudo usermod -aG docker engfb
+mkdir -p ~/basyx && cp basyx/* ~/basyx/ && cd ~/basyx && sudo docker compose up -d
+
 # flow da célula (substitui todos os flows do Node-RED)
 curl -X POST http://localhost:1880/flows -H "Content-Type: application/json"      -H "Node-RED-Deployment-Type: full" --data @nodered-celula.json
 ```
@@ -72,12 +77,25 @@ PC (w32time, sincronizado com `a.ntp.br`) → RPi (`chrony`, serve `192.168.0.0/
   (liga o servidor NTP do Windows e abre UDP 123 e ping só para `169.254.0.0/16`).
 - Conferir: `chronyc sources` deve mostrar `^* 169.254.124.59`.
 
+## AAS
+
+O `aas-gateway` cria o AAS no BaSyx ao iniciar (PUT, ou POST se ainda não existir) e atualiza
+`OperationalData` e `OPCUAPubSubInfo` 1x por segundo pela API AAS Part 2. O BaSyx guarda tudo em
+memória: se ele reiniciar, o gateway reenvia o AAS inteiro sozinho. O `.aasx` em `~/aas/` é
+regravado só a cada 60 s (cartão SD).
+
+- Web UI: `http://169.254.14.189:3000`; API: `http://169.254.14.189:8081/shells`.
+- Valores ao vivo: `GET /submodels/<id em base64url>/$value`.
+
 ## Pendente
 
 - Hora no boot: sem bateria no RTC, o RPi liga com a hora do último desligamento e o `chrony` só
   corrige ~20 s depois (teste de 2026-11-09: salto de 3035 s). `aas-gateway` e `nodered` sobem antes,
   então as primeiras mensagens podem sair com hora errada. Opções: `After=time-sync.target` +
   `chrony-wait.service` nos serviços, ou bateria ML-2020 no conector J5 do RPi 5.
+- Gateway IT: com MQTT QoS 0 sem keepalive, uma conexão TCP "meio morta" (ex.: RPi trocou de
+  rede) só é percebida quando o TCP do ESP32 desiste (~5 min em 2026-11-09). Usar ping MQTT
+  com timeout para reconectar em segundos.
 - Reserva DHCP de `192.168.0.2` para o MAC `88:a2:9e:10:6a:c2` na página do roteador.
 - `config.py` dos ESP32: Wi-Fi `OPC_UA`, `MQTT_BROKER = "192.168.0.2"` e `ntptime`.
 - Senha no Mosquitto antes de sair da fase de testes.

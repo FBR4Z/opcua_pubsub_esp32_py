@@ -9,8 +9,11 @@ Requisitos:
 Autor: Fábio Braz — Mestrado Eng. Elétrica, UEA
 """
 
+import base64
 import json
 import time
+import urllib.error
+import urllib.request
 import signal
 import sys
 from datetime import datetime, timezone
@@ -19,7 +22,7 @@ import paho.mqtt.client as mqtt
 
 from basyx.aas import model
 from basyx.aas.adapter.aasx import AASXWriter, DictSupplementaryFileContainer
-from basyx.aas.adapter.json import write_aas_json_file
+from basyx.aas.adapter.json import write_aas_json_file, AASToJsonEncoder
 
 # =============================================================================
 # Configuração
@@ -30,6 +33,11 @@ MQTT_PORT = 1883
 MQTT_TOPIC = "it/opcua/celula_robotica"
 
 AASX_OUTPUT = "celula_robotica.aasx"
+AASX_INTERVAL_S = 60        # arquivo .aasx/.json (cartão SD): só de vez em quando
+
+# Servidor AAS (Eclipse BaSyx, API AAS Part 2) — deploy/rpi5/basyx. Vazio = desligado.
+BASYX_URL = "http://127.0.0.1:8081"
+BASYX_INTERVAL_S = 1.0      # atualização do OperationalData no servidor
 JSON_OUTPUT = "celula_robotica_aas.json"
 
 # =============================================================================
@@ -285,6 +293,34 @@ def export_json(obj_store, filepath):
 
 
 # =============================================================================
+# Servidor AAS (API REST AAS Part 2)
+# =============================================================================
+
+def _b64url(identifier):
+    """Identificadores vão na URL em base64url (AAS Part 2)."""
+    return base64.urlsafe_b64encode(identifier.encode()).decode().rstrip("=")
+
+
+def _http(method, url, obj=None):
+    data = None if obj is None else json.dumps(obj, cls=AASToJsonEncoder).encode()
+    req = urllib.request.Request(url, data=data, method=method,
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=3) as resp:
+        return resp.status
+
+
+def basyx_upsert(obj):
+    """PUT no shell/submodelo; se ainda não existir no servidor (404), POST."""
+    col = "shells" if isinstance(obj, model.AssetAdministrationShell) else "submodels"
+    try:
+        _http("PUT", f"{BASYX_URL}/{col}/{_b64url(obj.id)}", obj)
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            raise
+        _http("POST", f"{BASYX_URL}/{col}", obj)
+
+
+# =============================================================================
 # MQTT → AAS Pipeline
 # =============================================================================
 
@@ -293,6 +329,9 @@ class AASGateway:
         self.obj_store, self.sm_operational, self.sm_protocol = create_aas()
         self.msg_count = 0
         self.running = True
+        self.t_basyx = 0.0
+        self.t_aasx = time.monotonic()
+        self.basyx_ok = False   # False = (re)enviar o AAS inteiro na próxima vez
         
         print("\n" + "=" * 60)
         print("  AAS GATEWAY — OPC UA PubSub → Asset Administration Shell")
@@ -300,7 +339,8 @@ class AASGateway:
         print("=" * 60)
         print(f"\n  Broker:  {MQTT_BROKER}:{MQTT_PORT}")
         print(f"  Tópico:  {MQTT_TOPIC}")
-        print(f"  Saída:   {AASX_OUTPUT}")
+        print(f"  Saída:   {AASX_OUTPUT} (a cada {AASX_INTERVAL_S} s)")
+        print(f"  BaSyx:   {BASYX_URL or 'desligado'}")
         print()
         
         # Exporta AAS inicial (sem dados)
@@ -308,7 +348,28 @@ class AASGateway:
         export_json(self.obj_store, JSON_OUTPUT)
         print(f"  [AAS] Estrutura inicial criada: {AASX_OUTPUT}")
         print(f"  [AAS] JSON exportado: {JSON_OUTPUT}")
+        self.sync_basyx()
         print(f"\n  Aguardando mensagens OPC UA PubSub...\n")
+
+    def sync_basyx(self):
+        """Envia o AAS ao servidor: tudo na primeira vez (ou depois de falha),
+        depois só os submodelos que mudam."""
+        if not BASYX_URL:
+            return
+        try:
+            if self.basyx_ok:
+                objs = [self.sm_operational, self.sm_protocol]
+            else:
+                objs = list(self.obj_store)
+            for obj in objs:
+                basyx_upsert(obj)
+            if not self.basyx_ok:
+                print(f"  [BaSyx] AAS publicado em {BASYX_URL}")
+            self.basyx_ok = True
+        except Exception as e:
+            if self.basyx_ok:
+                print(f"  [BaSyx] falhou ({e}); reenviando tudo na próxima")
+            self.basyx_ok = False
     
     def on_connect(self, client, userdata, flags, rc, properties=None):
         if rc == 0:
@@ -346,10 +407,16 @@ class AASGateway:
             update_submodel(self.sm_operational, self.sm_protocol,
                             payload, self.msg_count)
             
-            # Exporta .aasx atualizado a cada 5 mensagens (evitar I/O excessivo)
-            if self.msg_count % 5 == 0 or self.msg_count <= 3:
+            agora = time.monotonic()
+            if agora - self.t_aasx >= AASX_INTERVAL_S:
+                self.t_aasx = agora
                 export_aasx(self.obj_store, AASX_OUTPUT)
                 export_json(self.obj_store, JSON_OUTPUT)
+            # Servidor e log: 1x por segundo (o gateway IT publica a 5 Hz)
+            if agora - self.t_basyx < BASYX_INTERVAL_S:
+                return
+            self.t_basyx = agora
+            self.sync_basyx()
             
             # Extrai valores para log
             def val(v):
@@ -363,7 +430,7 @@ class AASGateway:
             peca = val(payload.get("PieceDetected", False))
             ciclo = val(payload.get("CycleCount", 0))
             
-            saved = " → .aasx" if (self.msg_count % 5 == 0 or self.msg_count <= 3) else ""
+            saved = " → BaSyx" if self.basyx_ok else ""
             
             print(f"  [#{self.msg_count:04d}] Seq={seq} Writer={writer_id} "
                   f"Base={jb:5.1f} Sh={js:5.1f} El={je:5.1f} Gr={jg:5.1f} "
@@ -391,6 +458,7 @@ class AASGateway:
             sys.exit(0)
         
         signal.signal(signal.SIGINT, handle_exit)
+        signal.signal(signal.SIGTERM, handle_exit)   # systemctl stop
         
         try:
             client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
