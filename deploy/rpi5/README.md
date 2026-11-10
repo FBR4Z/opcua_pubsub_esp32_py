@@ -98,9 +98,6 @@ regravado só a cada 60 s (cartão SD).
   corrige ~20 s depois (teste de 2026-11-09: salto de 3035 s). `aas-gateway` e `nodered` sobem antes,
   então as primeiras mensagens podem sair com hora errada. Opções: `After=time-sync.target` +
   `chrony-wait.service` nos serviços, ou bateria ML-2020 no conector J5 do RPi 5.
-- Gateway IT: com MQTT QoS 0 sem keepalive, uma conexão TCP "meio morta" (ex.: RPi trocou de
-  rede) só é percebida quando o TCP do ESP32 desiste (~5 min em 2026-11-09). Usar ping MQTT
-  com timeout para reconectar em segundos.
 - Reserva DHCP de `192.168.0.2` para o MAC `88:a2:9e:10:6a:c2` na página do roteador.
 - `config.py` dos ESP32: Wi-Fi `OPC_UA`, `MQTT_BROKER = "192.168.0.2"` e `ntptime`.
 - Senha no Mosquitto antes de sair da fase de testes.

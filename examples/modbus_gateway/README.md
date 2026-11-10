@@ -14,7 +14,7 @@ OT (escravo 1) --UART2, cabo J7, 115200 8N1--> IT --Wi-Fi OPC_UA, MQTT--> 192.16
 
 | Arquivo | Função |
 |---|---|
-| `main.py` | gateway: Wi-Fi → NTP → MQTT → laço de polling (200 ms) e publicação |
+| `main.py` | gateway: Wi-Fi → NTP → MQTT → laço de polling e publicação (~2,8 mensagens/s) |
 | `config.py` | copiado de [config_example.py](config_example.py), com a senha do Wi-Fi (não vai para o git) |
 | `opcua_pubsub.py` | biblioteca OPC UA PubSub JSON (cópia de `src/`) |
 | `modbus_rtu_client.py` | cliente Modbus RTU (função 03, leitura de holding registers) |
@@ -54,9 +54,14 @@ que é publicado. Para mudar o esquema, mexa só em `dataset()` e avise o
 - NTP: acerta o RTC (UTC) pelo RPi, para o `SourceTimestamp` sair certo; tenta de novo quando o
   broker aparecer.
 - MQTT: tenta o broker a cada 3 s; se uma publicação falhar, reconecta sem parar o polling.
-- Limitação conhecida: com QoS 0 e sem keepalive, uma conexão TCP "meio morta" (o RPi saiu da
-  rede e voltou) só é percebida quando o TCP do ESP32 desiste, ~5 min. Pendente: ping MQTT com
-  prazo de resposta.
+- Vigia da conexão: com QoS 0 a publicação não tem confirmação, e uma conexão TCP "meio morta"
+  (o RPi saiu da rede e voltou) não dá erro; antes levava ~5 min para ser percebida. Agora o
+  gateway manda PINGREQ a cada 5 s (`PING_MS`) e lê o PINGRESP sem bloquear; sem resposta em
+  12 s (`PING_TIMEOUT_MS`), ou com escrita parada há 2 s (`SOCK_TIMEOUT_S`), fecha o socket e
+  reconecta. Teste com o tráfego bloqueado 25 s no RPi: voltou 2 s depois de liberar.
+  `keepalive=30` faz o Mosquitto descartar a conexão velha.
+- Limitação: o `connect()` do `umqtt` não tem prazo; com o broker inalcançável, cada tentativa
+  pode segurar o laço (Modbus e displays) por alguns segundos.
 
 ## Gravar na placa (Thonny)
 

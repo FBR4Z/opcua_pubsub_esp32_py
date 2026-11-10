@@ -49,6 +49,12 @@ POLL_INTERVAL_MS = 200   # intervalo de polling+publicação (independente do
                           # PUBLISH_INTERVAL em segundos usado noutros exemplos
                           # da lib, que era pensado pra demos mais lentas)
 RECONNECT_MS = 3000
+# Vigia da conexão MQTT: com QoS 0 uma conexão TCP "meio morta" (ex.: o RPi saiu da
+# rede e voltou) não dá erro na publicação; só o PINGRESP do broker prova que ela vive.
+PING_MS = 5000           # PINGREQ a cada 5 s
+PING_TIMEOUT_MS = 12000  # sem PINGRESP há 12 s -> reconecta
+SOCK_TIMEOUT_S = 2       # escrita travada vira erro em vez de parar o laço
+MQTT_KEEPALIVE_S = 30    # o broker descarta a conexão antiga depois de 1,5 x isto
 
 # Offsets — devem bater com HOLD_REG_* em modbus_params.h (lado OT)
 REG_BASE_ANG      = 0
@@ -157,6 +163,38 @@ def ntp_sync(host):
         return False
 
 
+def mqtt_conectar(publisher):
+    if not publisher.connect():
+        return False
+    publisher.mqtt.sock.settimeout(SOCK_TIMEOUT_S)
+    return True
+
+
+def mqtt_derrubar(publisher):
+    """Fecha o socket sem mandar DISCONNECT (numa conexão morta a escrita travaria)."""
+    try:
+        publisher.mqtt.sock.close()
+    except Exception:
+        pass
+    publisher.connected = False
+
+
+def pingresp_chegou(mqtt):
+    """Lê sem bloquear; True se chegou um PINGRESP (0xD0 0x00). Só assinantes
+    recebem outros pacotes, e o gateway não assina nada."""
+    sock = mqtt.sock
+    sock.setblocking(False)
+    try:
+        b = sock.read(2)
+    except OSError:
+        b = None
+    finally:
+        sock.settimeout(SOCK_TIMEOUT_S)
+    if b == b"":
+        raise OSError("broker fechou a conexao")
+    return bool(b) and b[0] == 0xD0
+
+
 def poll_once():
     """Valores brutos do OT (usados pelos displays) ou None se ele não respondeu."""
     regs = modbus.read_holding_registers(SLAVE_ADDR, 0, REG_COUNT)
@@ -218,12 +256,12 @@ def main():
 
     mqtt_client = MQTTClient(
         "esp32-it-modbus-gateway", MQTT_BROKER, port=MQTT_PORT,
-        user=MQTT_USER, password=MQTT_PASSWORD,
+        user=MQTT_USER, password=MQTT_PASSWORD, keepalive=MQTT_KEEPALIVE_S,
     )
     publisher = OPCUAPublisher(PUBLISHER_ID, mqtt_client, base_topic=MQTT_TOPIC)
 
     # O ESP32 liga bem antes do RPi (broker): tenta até conseguir
-    while not publisher.connect():
+    while not mqtt_conectar(publisher):
         print("[IT] broker", MQTT_BROKER, "indisponivel, nova tentativa em", RECONNECT_MS, "ms")
         mostra(lcd, nokia, "Sem broker", MQTT_BROKER, "sem mqtt")
         time.sleep_ms(RECONNECT_MS)
@@ -235,14 +273,34 @@ def main():
     print("[IT] Loop iniciado. Publisher ID =", PUBLISHER_ID, "Topic =", MQTT_TOPIC)
     quadro = 0
     t_lcd = 0
+    t_ping = t_resp = t_tentativa = time.ticks_ms()
     while True:
         values = poll_once()
-        if values is not None and not publisher.publish(DATASET_WRITER_ID, dataset(values)):
-            # Broker caiu (ex.: RPi reiniciado): reconecta sem parar o polling
-            publisher.disconnect()
-            time.sleep_ms(RECONNECT_MS)
-            if publisher.connect() and not ntp_ok:
-                ntp_ok = ntp_sync(NTP_HOST)
+        agora = time.ticks_ms()
+        if publisher.connected:
+            ok = values is None or publisher.publish(DATASET_WRITER_ID, dataset(values))
+            try:
+                if pingresp_chegou(publisher.mqtt):
+                    t_resp = agora
+                if time.ticks_diff(agora, t_ping) >= PING_MS:
+                    publisher.mqtt.ping()
+                    t_ping = agora
+            except OSError as e:
+                print("[IT] erro na conexao MQTT:", e)
+                ok = False
+            if time.ticks_diff(agora, t_resp) > PING_TIMEOUT_MS:
+                print("[IT] broker sem resposta ha", time.ticks_diff(agora, t_resp) // 1000, "s")
+                ok = False
+            if not ok:
+                # Broker caiu ou conexão morta: reconecta sem parar o polling
+                mqtt_derrubar(publisher)
+                t_tentativa = agora
+        elif time.ticks_diff(agora, t_tentativa) >= RECONNECT_MS:
+            t_tentativa = agora
+            if mqtt_conectar(publisher):
+                t_ping = t_resp = time.ticks_ms()
+                if not ntp_ok:
+                    ntp_ok = ntp_sync(NTP_HOST)
         quadro += 1
         try:
             if nokia:

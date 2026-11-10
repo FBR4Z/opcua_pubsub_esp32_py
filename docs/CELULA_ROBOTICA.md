@@ -70,7 +70,8 @@ PubSub:
 ## Mensagem OPC UA PubSub (DataSet da célula)
 
 NetworkMessage JSON (IEC 62541-14 §7.2.3), `MessageType = "ua-data"`, uma DataSetMessage por
-mensagem, ~5 por segundo (polling Modbus a cada 200 ms). Cada campo é um DataValue com `Value` e
+mensagem, ~2,8 por segundo (medido: um ciclo a cada ~360 ms = 200 ms de espera + Modbus +
+display Nokia + publicação). Cada campo é um DataValue com `Value` e
 `SourceTimestamp` (UTC, hora acertada pelo RPi). O `StatusCode` só aparece quando não é Good.
 Os campos seguem a Tabela `tab:modbus_registers` da dissertação.
 
@@ -136,7 +137,7 @@ RPi. Detalhes em [deploy/rpi5/README.md](../deploy/rpi5/README.md#hora-ntp).
 | ESP32 IT liga antes do RPi | tenta o broker a cada 3 s; NTP de novo quando o broker aparece |
 | ESP32 IT ficou em outra rede (soft reset) | sai dela e entra na `OPC_UA` |
 | Broker cai e a publicação dá erro | reconecta a cada 3 s, sem parar o polling Modbus |
-| Conexão TCP "meio morta" (RPi trocou de rede) | **só volta quando o TCP do ESP32 desiste (~5 min)**: pendente |
+| Conexão TCP "meio morta" (RPi trocou de rede, pacotes somem) | PINGREQ a cada 5 s; sem PINGRESP em 12 s, ou escrita parada há 2 s, derruba e reconecta. Volta ~2 s depois de o caminho voltar |
 | RPi reinicia | Mosquitto, Node-RED, aas-gateway, chrony e BaSyx (Docker) sobem sozinhos; `wlan0` volta para a `OPC_UA` |
 | RPi liga sem a hora certa (sem bateria no RTC) | `chrony` corrige ~20 s depois do boot; as primeiras mensagens do AAS podem sair com hora errada |
 | BaSyx reinicia | o aas-gateway reenvia o AAS inteiro |
@@ -151,11 +152,14 @@ RPi. Detalhes em [deploy/rpi5/README.md](../deploy/rpi5/README.md#hora-ntp).
 | AAS (arquivo e BaSyx) e Node-RED com dados reais | ok |
 | Ciclo automático pelos botões da IHM | ok: `CycleCount` subiu para 6 no AAS |
 | Prosys OPC UA Browser assinando o PubSub JSON | ok |
-| RPi saiu e voltou para a `OPC_UA` com o ESP32 publicando | voltou sozinho, mas só depois de ~5 min (ver pendências) |
+| RPi saiu e voltou para a `OPC_UA` com o ESP32 publicando | voltou sozinho, mas só depois de ~5 min (antes da correção abaixo) |
+| Tráfego com o ESP32 bloqueado 25 s no RPi (`iptables DROP`), com o vigia de ping | voltou **2 s** depois de liberar |
+| Taxa de publicação | 56 mensagens em 20 s (2,8/s) |
 
 ## Pendências
 
-- Gateway IT: detectar conexão TCP meio morta (ping MQTT com prazo) e reconectar em segundos.
+- Gateway IT: enquanto o broker está inalcançável, cada tentativa de `connect()` (sem prazo no
+  `umqtt`) pode segurar o laço; Modbus e displays param até ela terminar.
 - Boot a frio de tudo junto (roteador, RPi, OT e IT).
 - Hora no boot do RPi: `After=time-sync.target` + `chrony-wait` nos serviços, ou bateria ML-2020 no RTC.
 - Reserva DHCP de `192.168.0.2` para o MAC `88:a2:9e:10:6a:c2` no roteador.
