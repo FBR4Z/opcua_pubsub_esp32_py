@@ -69,7 +69,7 @@ static pose_t s_poses[POSE_COUNT] = {
 static bool s_pose_ensinada[POSE_COUNT] = {0};
 
 static uint16_t s_garra_aberta  = 90;
-static uint16_t s_garra_fechada = 180;  // provisório: ajustar quando a peça estiver pronta
+static uint16_t s_garra_fechada = 165;  // pinças fecham em ~179; 180 forçava e queimou o servo
 static bool s_garra_aberta_ensinada  = false;
 static bool s_garra_fechada_ensinada = false;
 

@@ -14,12 +14,19 @@ typedef enum {
     SERVO_COUNT
 } servo_axis_t;
 
+// Ângulo máximo da garra. Acima do ponto em que as pinças se encostam o servo
+// fica forçando parado (corrente de travamento) e queima: foi o que aconteceu
+// em 2026-11 com a "fechada" em 180. Medido pelo usuário: as pinças fecham em
+// ~179; a "fechada" do automático é 165 e o limite fica em 170, com folga.
+// Servo novo: conferir com `ir` de 5 em 5 graus e ajustar se o ponto mudar.
+#define SERVO_GARRA_ANG_MAX 170
+
 // Inicializa o timer LEDC (50Hz) e os 4 canais PWM. Chamar uma vez no boot.
 void servo_driver_init(void);
 
-// Move o eixo para o ângulo (0-180). Sem limites de calibração ainda —
-// TODO: aplicar ang_min/ang_max reais de cada eixo quando a bancada
-// terminar a calibração (ver ESTADO_BANCADA_calibracao.md §6).
+// Move o eixo para o ângulo (0-180), limitado ao máximo do eixo (a garra
+// não passa de SERVO_GARRA_ANG_MAX, venha o comando do console, da IHM ou
+// do ciclo automático). Demais eixos ainda sem limites de calibração.
 void servo_write_angle(servo_axis_t axis, uint16_t angle_deg);
 
 // Solta o eixo (duty 0), igual ao soltar() do script MicroPython.

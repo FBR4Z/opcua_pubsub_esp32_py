@@ -3,6 +3,9 @@
 #include <string.h>
 #include "driver/ledc.h"
 #include "esp_err.h"
+#include "esp_log.h"
+
+static const char *TAG = "servo";
 
 // ============================================================
 // Mesma faixa validada na bancada MicroPython: 1.0-2.0ms, 50Hz.
@@ -18,13 +21,14 @@ typedef struct {
     int gpio;
     ledc_channel_t channel;
     const char *name;
+    uint16_t ang_max;
 } servo_cfg_t;
 
 static const servo_cfg_t s_cfg[SERVO_COUNT] = {
-    [SERVO_BASE]     = { 13, LEDC_CHANNEL_0, "base" },
-    [SERVO_OMBRO]    = { 14, LEDC_CHANNEL_1, "ombro" },
-    [SERVO_COTOVELO] = { 27, LEDC_CHANNEL_2, "cotovelo" },
-    [SERVO_GARRA]    = { 26, LEDC_CHANNEL_3, "garra" },
+    [SERVO_BASE]     = { 13, LEDC_CHANNEL_0, "base",     180 },
+    [SERVO_OMBRO]    = { 14, LEDC_CHANNEL_1, "ombro",    180 },
+    [SERVO_COTOVELO] = { 27, LEDC_CHANNEL_2, "cotovelo", 180 },
+    [SERVO_GARRA]    = { 26, LEDC_CHANNEL_3, "garra",    SERVO_GARRA_ANG_MAX },
 };
 
 static bool s_has_angle[SERVO_COUNT] = {0};
@@ -73,8 +77,10 @@ void servo_write_angle(servo_axis_t axis, uint16_t angle_deg)
     if (axis >= SERVO_COUNT) {
         return;
     }
-    if (angle_deg > 180) {
-        angle_deg = 180;
+    if (angle_deg > s_cfg[axis].ang_max) {
+        ESP_LOGW(TAG, "%s: %u graus pedidos, limitado a %u", s_cfg[axis].name,
+                 angle_deg, s_cfg[axis].ang_max);
+        angle_deg = s_cfg[axis].ang_max;
     }
     uint32_t duty = angle_to_duty(angle_deg);
     ledc_set_duty(LEDC_LOW_SPEED_MODE, s_cfg[axis].channel, duty);
