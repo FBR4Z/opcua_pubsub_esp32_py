@@ -160,6 +160,7 @@ RPi. Detalhes em [deploy/rpi5/README.md](../deploy/rpi5/README.md#hora-ntp).
 | Ciclo automático pelos botões da IHM | ok: `CycleCount` subiu para 6 no AAS |
 | Boot a frio de tudo junto (1ª vez) | serviços, BaSyx, dashboard e hora ok; **falhou** a rede: o RPi ficou esperando IPv6 sem aplicar o IPv4, o roteador deu o `.2` ao ESP32 IT e o AAS não foi reenviado ao BaSyx. Corrigido (IPv6 link-local, DHCP a partir de `.100`, reenvio do AAS a cada 1 s) |
 | Reset da placa IT com o DHCP novo (2x) | voltou a publicar em ~5 s, sempre como `192.168.0.100` |
+| Servo da garra | o original queimou: a "fechada" era 180 e as pinças encostam em 170, então ele ficava forçando parado. Firmware com fechada 165 e limite 167 (`servo_driver`, vale para console, IHM e automático); servo trocado em 2026-11-09, ok |
 | Prosys OPC UA Browser assinando o PubSub JSON | ok |
 | RPi saiu e voltou para a `OPC_UA` com o ESP32 publicando | voltou sozinho, mas só depois de ~5 min (antes da correção abaixo) |
 | Tráfego com o ESP32 bloqueado 25 s no RPi (`iptables DROP`), com o vigia de ping | voltou **2 s** depois de liberar |
@@ -167,13 +168,11 @@ RPi. Detalhes em [deploy/rpi5/README.md](../deploy/rpi5/README.md#hora-ntp).
 
 ## Pendências
 
-- **Servo da garra queimado (2026-11-09):** faz barulho mas não gira; trocar. Causa: a "fechada"
-  era 180, mas as pinças já encostam em 170, então o servo ficava forçando parado. Firmware
-  corrigido e gravado no OT em 2026-11-09 (fechada 165, limite 167 em `servo_driver`, valendo para
-  console, IHM e automático). Com o servo novo, conferir com `ir` onde as pinças encostam.
 - Gateway IT: enquanto o broker está inalcançável, cada tentativa de `connect()` (sem prazo no
   `umqtt`) pode segurar o laço; Modbus e displays param até ela terminar.
 - Repetir o boot a frio de tudo junto, agora com as correções da 1ª tentativa.
+- Limitar a memória dos 3 Java do BaSyx (hoje sem limite: até ~2 GB cada; usam ~1,1 GB juntos).
+- Texto de abertura do firmware OT ainda diz "Firmware 2026-11-07" (atualizar na próxima gravação).
 - Hora no boot do RPi: `After=time-sync.target` + `chrony-wait` nos serviços, ou bateria ML-2020 no RTC.
 - Senha no Mosquitto antes de sair da fase de testes.
 - Simulador `examples/aas_digital_twin/main.py` ainda publica as juntas em rad (a célula real e o AAS usam graus).
