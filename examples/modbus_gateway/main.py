@@ -1,12 +1,13 @@
 """
 ESP32 IT — Modbus RTU Client + Gateway OPC UA PubSub.
 
-Fluxo: WiFi -> MQTT -> polling Modbus no OT (Server) -> publica via
+Fluxo: WiFi -> NTP -> MQTT -> polling Modbus no OT (Server) -> publica via
 opcua_pubsub.OPCUAPublisher (lib real do projeto).
 
 Pré-requisitos no dispositivo (via Thonny):
-- modbus_rtu_client.py, opcua_pubsub.py, config.py (copiado de config_example.py
-  e preenchido com WiFi/MQTT reais) precisam estar na raiz do ESP32.
+- modbus_rtu_client.py, opcua_pubsub.py, lcd_i2c_test.py, nokia5110.py,
+  painel.py e config.py (copiado de config_example.py e preenchido com
+  WiFi/MQTT reais) precisam estar na raiz do ESP32.
 - umqtt.simple precisa estar instalado (não vem por padrão no firmware
   MicroPython stock). No Thonny: Tools > Manage packages > procurar
   "micropython-umqtt.simple" e instalar; ou via REPL:
@@ -21,6 +22,8 @@ from umqtt.simple import MQTTClient
 from lcd_i2c_test import LCD_I2C
 from modbus_rtu_client import ModbusRTUClient
 from opcua_pubsub import OPCUAPublisher, DataValue, StatusCode
+from nokia5110 import Nokia5110
+import painel
 
 try:
     from config import (
@@ -96,9 +99,39 @@ def lcd_saudacao():
         return None
 
 
+def nokia_init():
+    """Inicia o Nokia 5110. Sem display, o gateway segue normalmente."""
+    try:
+        d = Nokia5110()
+        painel.nokia_boot(d, "iniciando")
+        print("[nokia] ok")
+        return d
+    except Exception as e:
+        print("[nokia] erro:", e)
+        return None
+
+
+def mostra(lcd, nokia, l0, l1, nk):
+    """Mensagem de boot nos dois displays (erros de display nunca param o gateway)."""
+    try:
+        if lcd:
+            lcd.print_line(0, l0)
+            lcd.print_line(1, l1)
+        if nokia:
+            painel.nokia_boot(nokia, nk)
+    except Exception as e:
+        print("[display] erro:", e)
+
+
 def wifi_connect(ssid, password, timeout_ms=15000):
     sta = network.WLAN(network.STA_IF)
     sta.active(True)
+    # A conexão sobrevive ao soft reset: pode ter ficado em outra rede
+    if sta.isconnected() and sta.config("ssid") != ssid:
+        print("[wifi] saindo de", sta.config("ssid"))
+        sta.disconnect()
+        while sta.isconnected():
+            time.sleep_ms(100)
     if not sta.isconnected():
         print("[wifi] conectando a", ssid)
         sta.connect(ssid, password)
@@ -125,14 +158,29 @@ def ntp_sync(host):
 
 
 def poll_once():
-    """Lê o OT e monta o DataSet com os campos da Tabela tab:modbus_registers
-    da dissertação (os mesmos que o AAS e o Node-RED consomem)."""
+    """Valores brutos do OT (usados pelos displays) ou None se ele não respondeu."""
     regs = modbus.read_holding_registers(SLAVE_ADDR, 0, REG_COUNT)
     if regs is None:
         print("[modbus] timeout ou erro na leitura")
         return None
 
-    dist = regs[REG_SENSOR_DIST]
+    return {
+        "base_ang": regs[REG_BASE_ANG],
+        "ombro_ang": regs[REG_OMBRO_ANG],
+        "cotovelo_ang": regs[REG_COTOVELO_ANG],
+        "garra_ang": regs[REG_GARRA_ANG],
+        "esteira_vel": regs[REG_ESTEIRA_VEL],
+        "esteira_state": regs[REG_ESTEIRA_STATE],
+        "sensor_dist": regs[REG_SENSOR_DIST],
+        "cycle_count": regs[REG_CYCLE_COUNT],
+        "auto_fase": regs[REG_AUTO_FASE],
+    }
+
+
+def dataset(v):
+    """DataSet publicado: campos da Tabela tab:modbus_registers da dissertação
+    (os mesmos que o AAS e o Node-RED consomem)."""
+    dist = v["sensor_dist"]
     if dist == SENSOR_SEM_LEITURA:
         sensor = DataValue(None, StatusCode.BAD_SENSOR_FAILURE)
         peca = DataValue(False, StatusCode.UNCERTAIN)
@@ -141,28 +189,31 @@ def poll_once():
         peca = dist < PECA_LIMIAR_CM
 
     return {
-        "JointBase": float(regs[REG_BASE_ANG]),          # graus
-        "JointShoulder": float(regs[REG_OMBRO_ANG]),
-        "JointElbow": float(regs[REG_COTOVELO_ANG]),
-        "JointGripper": float(regs[REG_GARRA_ANG]),
-        "ConveyorSpeed": regs[REG_ESTEIRA_VEL],          # %
-        "ConveyorRunning": regs[REG_ESTEIRA_STATE] != 0,
+        "JointBase": float(v["base_ang"]),               # graus
+        "JointShoulder": float(v["ombro_ang"]),
+        "JointElbow": float(v["cotovelo_ang"]),
+        "JointGripper": float(v["garra_ang"]),
+        "ConveyorSpeed": v["esteira_vel"],               # %
+        "ConveyorRunning": v["esteira_state"] != 0,
         "SensorDistance": sensor,                        # cm
         "PieceDetected": peca,
-        "CycleCount": regs[REG_CYCLE_COUNT],
-        "AutoPhase": regs[REG_AUTO_FASE],                # auto_fase_t do OT
+        "CycleCount": v["cycle_count"],
+        "AutoPhase": v["auto_fase"],                     # auto_fase_t do OT
     }
 
 
 def main():
-    lcd_saudacao()
+    lcd = lcd_saudacao()
+    nokia = nokia_init()
     # O roteador da célula também demora a ligar: insiste no Wi-Fi
     while True:
         try:
-            wifi_connect(WIFI_SSID, WIFI_PASSWORD)
+            sta = wifi_connect(WIFI_SSID, WIFI_PASSWORD)
             break
         except RuntimeError as e:
             print("[wifi]", e, "- nova tentativa")
+            mostra(lcd, nokia, "Sem WiFi", WIFI_SSID, "sem wifi")
+    mostra(lcd, nokia, "WiFi conectado", sta.ifconfig()[0], "wifi ok")
     ntp_ok = ntp_sync(NTP_HOST)
 
     mqtt_client = MQTTClient(
@@ -174,19 +225,34 @@ def main():
     # O ESP32 liga bem antes do RPi (broker): tenta até conseguir
     while not publisher.connect():
         print("[IT] broker", MQTT_BROKER, "indisponivel, nova tentativa em", RECONNECT_MS, "ms")
+        mostra(lcd, nokia, "Sem broker", MQTT_BROKER, "sem mqtt")
         time.sleep_ms(RECONNECT_MS)
     if not ntp_ok:
         ntp_ok = ntp_sync(NTP_HOST)
+    mostra(lcd, nokia, "MQTT conectado", MQTT_BROKER, "mqtt ok")
+    time.sleep(1)
 
     print("[IT] Loop iniciado. Publisher ID =", PUBLISHER_ID, "Topic =", MQTT_TOPIC)
+    quadro = 0
+    t_lcd = 0
     while True:
         values = poll_once()
-        if values is not None and not publisher.publish(DATASET_WRITER_ID, values):
+        if values is not None and not publisher.publish(DATASET_WRITER_ID, dataset(values)):
             # Broker caiu (ex.: RPi reiniciado): reconecta sem parar o polling
             publisher.disconnect()
             time.sleep_ms(RECONNECT_MS)
             if publisher.connect() and not ntp_ok:
                 ntp_ok = ntp_sync(NTP_HOST)
+        quadro += 1
+        try:
+            if nokia:
+                painel.nokia_desenha(nokia, values, sta.isconnected(), publisher.connected,
+                                     values is not None, quadro)
+            if lcd and time.ticks_diff(time.ticks_ms(), t_lcd) > 1000:
+                painel.lcd_telemetria(lcd, values)
+                t_lcd = time.ticks_ms()
+        except Exception as e:
+            print("[display] erro:", e)
         time.sleep_ms(POLL_INTERVAL_MS)
 
 
