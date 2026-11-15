@@ -50,9 +50,13 @@ que é publicado. Para mudar o esquema, mexa só em `dataset()` e avise o
 ## Partida e recuperação
 
 - Wi-Fi: tenta até conseguir (o roteador demora mais que o ESP32 para ligar). Se a conexão que
-  sobreviveu ao soft reset for de outro SSID, sai dela primeiro.
+  sobreviveu ao soft reset for de outro SSID, sai dela primeiro. Sem a rede, o ESP32 continua
+  tentando sozinho, e um `connect()` por cima disso dá `OSError: Wifi Internal State Error`: por
+  isso há um `disconnect()` antes de cada tentativa, qualquer erro é tratado e a interface é
+  desligada e religada a cada falha.
 - NTP: acerta o RTC (UTC) pelo RPi, para o `SourceTimestamp` sair certo; tenta de novo quando o
-  broker aparecer.
+  broker aparecer e depois a cada 60 s (`NTP_RESYNC_MS`), porque o RPi sem bateria no RTC serve a
+  hora errada nos primeiros segundos após o boot.
 - MQTT: tenta o broker a cada 3 s; se uma publicação falhar, reconecta sem parar o polling.
 - Vigia da conexão: com QoS 0 a publicação não tem confirmação, e uma conexão TCP "meio morta"
   (o RPi saiu da rede e voltou) não dá erro; antes levava ~5 min para ser percebida. Agora o

@@ -55,6 +55,9 @@ PING_MS = 5000           # PINGREQ a cada 5 s
 PING_TIMEOUT_MS = 12000  # sem PINGRESP há 12 s -> reconecta
 SOCK_TIMEOUT_S = 2       # escrita travada vira erro em vez de parar o laço
 MQTT_KEEPALIVE_S = 30    # o broker descarta a conexão antiga depois de 1,5 x isto
+# O RPi não tem bateria no RTC: logo depois do boot ele serve a hora do último
+# desligamento até o chrony acertar pelo PC (~20 s). NTP periódico corrige sozinho.
+NTP_RESYNC_MS = 60000
 
 # Offsets — devem bater com HOLD_REG_* em modbus_params.h (lado OT)
 REG_BASE_ANG      = 0
@@ -140,10 +143,14 @@ def wifi_connect(ssid, password, timeout_ms=15000):
             time.sleep_ms(100)
     if not sta.isconnected():
         print("[wifi] conectando a", ssid)
+        # Sem a rede, o ESP32 segue tentando sozinho; connect() por cima dessa
+        # tentativa pendente dá "OSError: Wifi Internal State Error"
+        sta.disconnect()
         sta.connect(ssid, password)
         t0 = time.ticks_ms()
         while not sta.isconnected():
             if time.ticks_diff(time.ticks_ms(), t0) > timeout_ms:
+                sta.disconnect()
                 raise RuntimeError("Timeout conectando ao WiFi")
             time.sleep_ms(200)
     print("[wifi] conectado, IP =", sta.ifconfig()[0])
@@ -248,9 +255,13 @@ def main():
         try:
             sta = wifi_connect(WIFI_SSID, WIFI_PASSWORD)
             break
-        except RuntimeError as e:
-            print("[wifi]", e, "- nova tentativa")
+        except Exception as e:   # timeout ou erro interno do Wi-Fi do ESP32
+            print("[wifi]", repr(e), "- nova tentativa")
             mostra(lcd, nokia, "Sem WiFi", WIFI_SSID, "sem wifi")
+            # Desliga e religa a interface para limpar o estado do driver
+            sta = network.WLAN(network.STA_IF)
+            sta.active(False)
+            time.sleep_ms(500)
     mostra(lcd, nokia, "WiFi conectado", sta.ifconfig()[0], "wifi ok")
     ntp_ok = ntp_sync(NTP_HOST)
 
@@ -273,10 +284,13 @@ def main():
     print("[IT] Loop iniciado. Publisher ID =", PUBLISHER_ID, "Topic =", MQTT_TOPIC)
     quadro = 0
     t_lcd = 0
-    t_ping = t_resp = t_tentativa = time.ticks_ms()
+    t_ping = t_resp = t_tentativa = t_ntp = time.ticks_ms()
     while True:
         values = poll_once()
         agora = time.ticks_ms()
+        if sta.isconnected() and time.ticks_diff(agora, t_ntp) >= NTP_RESYNC_MS:
+            t_ntp = agora
+            ntp_ok = ntp_sync(NTP_HOST)
         if publisher.connected:
             ok = values is None or publisher.publish(DATASET_WRITER_ID, dataset(values))
             try:

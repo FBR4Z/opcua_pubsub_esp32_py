@@ -132,14 +132,19 @@ GET http://169.254.14.189:8081/submodels/<id>/$value
 ## Hora (NTP)
 
 PC (w32time, sincronizado com `a.ntp.br`) → RPi (`chrony`, pelo cabo) → ESP32 IT (`ntptime` no
-boot). Diferença PC↔RPi da ordem de 0,1 ms; o `SourceTimestamp` do ESP32 bate no segundo com o
+boot e depois a cada 60 s). Diferença PC↔RPi da ordem de 0,1 ms; o `SourceTimestamp` do ESP32 bate no segundo com o
 RPi. Detalhes em [deploy/rpi5/README.md](../deploy/rpi5/README.md#hora-ntp).
+
+O RPi não tem bateria no RTC: ao ligar, ele volta com a hora do último desligamento e o `chrony`
+só acerta pelo PC alguns segundos depois. Em 2026-11-15 a IT fez o NTP justo nessa janela e ficou
+publicando com a hora de 09/11 (ela só refazia o NTP se a 1ª tentativa falhasse). Desde então o
+gateway refaz o NTP a cada 60 s (`NTP_RESYNC_MS`): uma hora errada dura no máximo ~1 min.
 
 ## Boot e recuperação
 
 | Situação | Comportamento |
 |---|---|
-| ESP32 IT liga antes do roteador | tenta o Wi-Fi até conseguir |
+| ESP32 IT liga antes do roteador | tenta o Wi-Fi a cada ~15 s até conseguir; a cada falha desliga e religa a interface |
 | ESP32 IT liga antes do RPi | tenta o broker a cada 3 s; NTP de novo quando o broker aparece |
 | ESP32 IT ficou em outra rede (soft reset) | sai dela e entra na `OPC_UA` |
 | Broker cai e a publicação dá erro | reconecta a cada 3 s, sem parar o polling Modbus |
@@ -162,6 +167,12 @@ RPi. Detalhes em [deploy/rpi5/README.md](../deploy/rpi5/README.md#hora-ntp).
 | Reset da placa IT com o DHCP novo (2x) | voltou a publicar em ~5 s, sempre como `192.168.0.100` |
 | Servo da garra | o original queimou: a "fechada" era 180 e as pinças encostam em 170, então ele ficava forçando parado. Firmware com fechada 165 e limite 167 (`servo_driver`, vale para console, IHM e automático); servo trocado em 2026-11-09, ok |
 | Prosys OPC UA Browser assinando o PubSub JSON | ok |
+| Placas caseiras (2026-11-15): Modbus pelo J7, MQTT, AAS no BaSyx | ok: 55 mensagens em 20 s, sem timeout de Modbus; `CycleCount` 2 no BaSyx |
+| Boot a frio de tudo junto (2ª vez, 2026-11-15) | RPi ok: cabo +9 s, hora certa +34 s, serviços ativos, BaSyx "healthy" +80 s. **Falhou** a IT: ligou antes do roteador e travou em "Sem WiFi" até o reset |
+| Roteador desligado com a IT no Thonny (código antigo) | reproduzido: `OSError: Wifi Internal State Error` no `sta.connect()` (o ESP32 ainda tentava reconectar sozinho) e o programa parava, porque o laço só tratava `RuntimeError` |
+| Mesmo teste com a correção (`disconnect()` antes do `connect()`, qualquer erro tratado, interface religada a cada falha) | ok: 9 tentativas sem erro com o roteador desligado; religado, entrou no Wi-Fi e voltou a publicar sozinha |
+| Boot a frio de tudo junto (3ª vez, com as correções gravadas) | **ok, sem tocar em nada**: hora do RPi certa aos 32 s; 1ª mensagem da IT com a hora certa e AAS no BaSyx aos ~66 s; BaSyx "healthy" aos ~87 s (tempos desde o boot do RPi) |
+| RPi desligou (tomada folgada) e voltou com a IT ligada (2026-11-15) | a IT pegou a hora errada do RPi (09/11) na janela antes do `chrony`; corrigido com NTP a cada 60 s, conferido (2º acerto 61 s após o boot) |
 | RPi saiu e voltou para a `OPC_UA` com o ESP32 publicando | voltou sozinho, mas só depois de ~5 min (antes da correção abaixo) |
 | Tráfego com o ESP32 bloqueado 25 s no RPi (`iptables DROP`), com o vigia de ping | voltou **2 s** depois de liberar |
 | Taxa de publicação | 56 mensagens em 20 s (2,8/s) |
@@ -170,7 +181,6 @@ RPi. Detalhes em [deploy/rpi5/README.md](../deploy/rpi5/README.md#hora-ntp).
 
 - Gateway IT: enquanto o broker está inalcançável, cada tentativa de `connect()` (sem prazo no
   `umqtt`) pode segurar o laço; Modbus e displays param até ela terminar.
-- Repetir o boot a frio de tudo junto, agora com as correções da 1ª tentativa.
 - Limitar a memória dos 3 Java do BaSyx (hoje sem limite: até ~2 GB cada; usam ~1,1 GB juntos).
 - Texto de abertura do firmware OT ainda diz "Firmware 2026-11-07" (atualizar na próxima gravação).
 - Hora no boot do RPi: `After=time-sync.target` + `chrony-wait` nos serviços, ou bateria ML-2020 no RTC.
