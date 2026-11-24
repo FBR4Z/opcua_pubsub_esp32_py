@@ -3,6 +3,7 @@
 Raspberry Pi 5 8 GB, hostname `AAS`, Raspberry Pi OS (Debian 13 trixie, 64-bit), configurado
 só por SSH (sem tela) ou `mstsc` (xrdp) em `169.254.14.189`.
 Visão geral da célula (endereços, DataSet, testes): [docs/CELULA_ROBOTICA.md](../../docs/CELULA_ROBOTICA.md).
+Roteiro de demonstração e verificação: [docs/GUIA_DEMONSTRACAO.md](../../docs/GUIA_DEMONSTRACAO.md) e `python deploy/pc/verificar_celula.py`.
 
 ```
 ESP32 OT --Modbus RTU--> ESP32 IT --Wi-Fi--> roteador da célula --Wi-Fi (wlan0)--> RPi 5 --cabo (eth0)--> PC

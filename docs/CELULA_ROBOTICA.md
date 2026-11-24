@@ -197,4 +197,5 @@ gateway refaz o NTP a cada 60 s (`NTP_RESYNC_MS`): uma hora errada dura no máxi
 | [examples/modbus_gateway/](../examples/modbus_gateway/README.md) | gateway IT (MicroPython) |
 | [examples/aas_digital_twin/](../examples/aas_digital_twin/README_PT.md) | `aas_gateway.py` (AAS) e simulador |
 | [deploy/rpi5/](../deploy/rpi5/README.md) | instalação do RPi: Mosquitto, Node-RED (flow), BaSyx, chrony, rede |
-| [deploy/pc/](../deploy/pc/) | scripts do PC: servidor NTP do Windows e IP fixo do cabo |
+| [deploy/pc/](../deploy/pc/) | scripts do PC: servidor NTP do Windows, IP fixo do cabo e `verificar_celula.py` (confere se tudo está no ar) |
+| [GUIA_DEMONSTRACAO.md](GUIA_DEMONSTRACAO.md) | roteiro para mostrar a célula: onde ver cada coisa, portas, contêineres Docker |
