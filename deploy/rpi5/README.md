@@ -27,7 +27,7 @@ ESP32 OT --Modbus RTU--> ESP32 IT --Wi-Fi--> roteador da célula --Wi-Fi (wlan0)
 | Serviço | Porta | Arquivo |
 |---|---|---|
 | `mosquitto` | 1883 | [mosquitto-celula.conf](mosquitto-celula.conf) → `/etc/mosquitto/conf.d/celula.conf` |
-| `nodered` (+ `@flowfuse/node-red-dashboard`) | 1880 | [nodered-celula.json](nodered-celula.json) (flow); dashboard em `http://<RPi>:1880/dashboard/celula` |
+| `nodered` (+ `@flowfuse/node-red-dashboard`) | 1880 | [nodered-celula.json](nodered-celula.json) (flow); dashboard em `http://<RPi>:1880/dashboard/celula`; estado do sistema (contêineres, serviços) em `/dashboard/sistema`, lido de [celula_status.py](celula_status.py) em `~/aas/` |
 | `aas-gateway` | — | [aas-gateway.service](aas-gateway.service) → `/etc/systemd/system/`; script em `~/aas/` |
 | BaSyx (Docker): `aas-env`, `aas-registry`, `sm-registry`, `aas-web-ui` | 8081, 8082, 8083, 3000 | [basyx/](basyx/) → `~/basyx/`; Web UI em `http://169.254.14.189:3000` |
 | `chrony` | 123/udp | [chrony-celula.conf](chrony-celula.conf) → `/etc/chrony/conf.d/celula.conf` |
@@ -48,6 +48,7 @@ sudo install -m 644 chrony-celula.conf /etc/chrony/conf.d/celula.conf
 sudo systemctl restart chrony
 
 mkdir -p ~/aas && cp aas_gateway.py requirements.txt ~/aas/    # de examples/aas_digital_twin
+cp celula_status.py ~/aas/                                      # página /dashboard/sistema
 cd ~/aas && python3 -m venv venv && venv/bin/pip install -r requirements.txt
 sudo install -m 644 aas-gateway.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now aas-gateway

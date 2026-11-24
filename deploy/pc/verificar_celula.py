@@ -16,6 +16,7 @@ SERVICOS = ["mosquitto", "nodered", "aas-gateway", "chrony", "xrdp", "docker"]
 CONTAINERS = ["aas-env", "aas-registry", "sm-registry", "aas-web-ui"]
 PAGINAS = [
     ("Dashboard Node-RED", f"http://{RPI}:1880/dashboard/celula"),
+    ("Página Sistema", f"http://{RPI}:1880/dashboard/sistema"),
     ("Editor Node-RED", f"http://{RPI}:1880/"),
     ("AAS Web UI (BaSyx)", f"http://{RPI}:3000/"),
     ("AAS Environment", f"http://{RPI}:8081/shells"),
